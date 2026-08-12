@@ -300,41 +300,31 @@ button {
   flex: 0 0 auto;
 }
 
-.title-reg-row {
-  flex-wrap: wrap;
-}
-.title-reg-row .field-label {
-  flex: 1 1 auto;
-}
-.title-reg-upc {
-  flex: 0 0 auto;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
-}
-.title-reg-row select {
-  flex: 0 0 170px;
-  font-family: inherit;
-  font-size: 14px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-}
-.title-reg-row select:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
 .territory-row {
   gap: 10px;
   flex-wrap: wrap;
   padding-left: 36px;
   background: var(--bg);
 }
+.territory-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.territory-field-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding-left: 1px;
+}
+.territory-field-text {
+  flex: 1 1 120px;
+}
+.territory-field-number {
+  flex: 0 0 80px;
+}
 .territory-row input[type="text"],
-.territory-row input[type="number"] {
+.territory-row input[type="number"],
+.territory-row select {
   font-family: inherit;
   font-size: 14px;
   padding: 6px 8px;
@@ -342,17 +332,15 @@ button {
   border-radius: 6px;
   background: var(--surface);
   color: var(--text);
+  width: 100%;
 }
 .territory-row input[type="text"]:focus,
-.territory-row input[type="number"]:focus {
+.territory-row input[type="number"]:focus,
+.territory-row select:focus {
   border-color: var(--accent);
   outline: none;
 }
-.territory-row input[type="text"] {
-  flex: 1 1 120px;
-}
 .territory-row input[type="number"] {
-  flex: 0 0 80px;
   text-align: right;
 }
 

@@ -1,13 +1,14 @@
 // Distro Tracker backend — bind this script to the Google Sheet that will hold one
 // tab per artist. Each tab is fully owned by the sync (its layout is written by
 // pushArtist_ below); you can hand-edit the cell values, just don't rename the
-// section headers (PARAMETERS / PRODUCT / TERRITORY BREAKDOWN) or column headers.
+// section headers (PARAMETERS / PRODUCT / TERRITORY BREAKDOWN / MANUFACTURING PLANTS)
+// or column headers.
 //
 // Deploy: Extensions > Apps Script > paste this file's contents into Code.gs
 // > Deploy > New deployment > type: Web app > Execute as: Me >
 // Who has access: Anyone > Deploy. Copy the Web App URL into sync-config.js.
 
-var SECTION_WIDTH = 8;
+var SECTION_WIDTH = 6;
 
 function doGet(e) {
   var action = e.parameter.action;
@@ -30,7 +31,7 @@ function doPost(e) {
   if (data.action === "push") {
     var artist = (data.artist || "").toString().trim();
     if (!artist) return jsonOutput_({ error: "artist required" });
-    pushArtist_(artist, data.parameters || [], data.product || [], data.territories || []);
+    pushArtist_(artist, data.parameters || [], data.product || [], data.territories || [], data.plants || []);
     return jsonOutput_({ success: true });
   }
   return jsonOutput_({ error: "unknown action" });
@@ -52,12 +53,13 @@ function cellText_(v) {
 
 function pullArtist_(artistName) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(artistName);
-  if (!sheet) return { exists: false, parameters: [], product: [], territories: [] };
+  if (!sheet) return { exists: false, parameters: [], product: [], territories: [], plants: [] };
 
   var values = sheet.getDataRange().getValues();
   var parameters = [];
   var product = [];
   var territories = [];
+  var plants = [];
   var section = null;
 
   for (var i = 0; i < values.length; i++) {
@@ -67,6 +69,7 @@ function pullArtist_(artistName) {
     if (a === "PARAMETERS") { section = "params"; continue; }
     if (a === "PRODUCT") { section = "product"; continue; }
     if (a === "TERRITORY BREAKDOWN") { section = "territory"; continue; }
+    if (a === "MANUFACTURING PLANTS") { section = "plants"; continue; }
     if (a === "Parameter" || a === "ID" || a === "Product ID") continue; // column header rows
     if (a === "") continue; // blank separator rows
 
@@ -80,18 +83,18 @@ function pullArtist_(artistName) {
         row[3],
         cellText_(row[4]),
         cellText_(row[5]),
-        cellText_(row[6]),
-        cellText_(row[7]),
       ]);
     } else if (section === "territory") {
       territories.push([a, cellText_(row[1]), cellText_(row[2]), row[3]]);
+    } else if (section === "plants") {
+      plants.push([a, cellText_(row[1]), cellText_(row[2]), cellText_(row[3])]);
     }
   }
 
-  return { exists: true, parameters: parameters, product: product, territories: territories };
+  return { exists: true, parameters: parameters, product: product, territories: territories, plants: plants };
 }
 
-function pushArtist_(artistName, parameters, product, territories) {
+function pushArtist_(artistName, parameters, product, territories, plants) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(artistName);
   if (!sheet) sheet = ss.insertSheet(artistName);
@@ -103,12 +106,16 @@ function pushArtist_(artistName, parameters, product, territories) {
   parameters.forEach(function (p) { rows.push([p[0], p[1]]); });
   rows.push([""]);
   rows.push(["PRODUCT"]);
-  rows.push(["ID", "Type", "Title", "Quantity", "GS1 Registration", "UPC", "Title Registration", "PO#"]);
+  rows.push(["ID", "Type", "Title", "Quantity", "GS1 Registration", "UPC"]);
   product.forEach(function (p) { rows.push(p); });
   rows.push([""]);
   rows.push(["TERRITORY BREAKDOWN"]);
   rows.push(["Product ID", "Territory", "Distributor / Location", "Quantity"]);
   territories.forEach(function (t) { rows.push(t); });
+  rows.push([""]);
+  rows.push(["MANUFACTURING PLANTS"]);
+  rows.push(["ID", "Plant Name", "Region", "Quantity"]);
+  (plants || []).forEach(function (p) { rows.push(p); });
 
   rows = rows.map(function (r) {
     var padded = r.slice();
@@ -125,6 +132,9 @@ function pushArtist_(artistName, parameters, product, territories) {
   var territoryHeaderRow = productHeaderRow + product.length + 2;
   sheet.getRange(territoryHeaderRow - 1, 1).setFontWeight("bold");
   sheet.getRange(territoryHeaderRow, 1, 1, 4).setFontWeight("bold");
+  var plantsHeaderRow = territoryHeaderRow + territories.length + 2;
+  sheet.getRange(plantsHeaderRow - 1, 1).setFontWeight("bold");
+  sheet.getRange(plantsHeaderRow, 1, 1, 4).setFontWeight("bold");
   sheet.autoResizeColumns(1, SECTION_WIDTH);
 }
 

@@ -15,7 +15,7 @@ const DEFAULT_STATE = {
       group: "Type",
       options: [
         { value: "cd", label: "CD", color: "blue" },
-        { value: "vinyl", label: "Vinyl", color: "purple" },
+        { value: "vinyl", label: "Vinyl", color: "purple", allowCustomTitle: true },
         { value: "other", label: "Other", color: "gray", allowCustomTitle: true },
       ],
       // Renders a second status selector under each entry, plus (when set to
@@ -32,33 +32,36 @@ const DEFAULT_STATE = {
         extraFieldKey: "upc",
         extraFieldLabel: "UPC",
       },
-      // A single always-visible follow-up text field under each entry (once a type is
-      // picked), independent of GS1 status.
-      entryExtraField: { key: "poNumber", label: "PO#", placeholder: "PO #, e.g. 12345" },
       // Renders an add-as-many-as-you-want breakdown under each entry (e.g. how many
       // units go to each territory/distributor).
       entrySubList: {
         key: "territories",
         label: "Territory Breakdown",
         fields: [
-          { key: "territory", label: "Territory", type: "text", placeholder: "Territory, e.g. US" },
-          { key: "distributor", label: "Distributor / Location", type: "text", placeholder: "Distributor, e.g. AMPED" },
+          { key: "territory", label: "Territory", type: "text", placeholder: "e.g. US" },
+          { key: "distributor", label: "Distributor / Location", type: "text", placeholder: "e.g. AMPED" },
           { key: "quantity", label: "Qty", type: "number" },
         ],
       },
     },
     {
-      // Auto-populated: one row per Product entry that has a UPC set, each with its
-      // own Registered / Not Registered status. Nothing to add/remove here directly —
-      // the list itself always mirrors whichever Product entries currently have a UPC.
-      key: "titleRegistration",
-      label: "Title Registration",
-      type: "derivedList",
+      key: "luminateRegistration",
+      label: "Luminate Registration",
+      type: "status",
       group: "Type",
-      sourceField: "product",
       options: [
         { value: "registered", label: "Registered", color: "green" },
         { value: "not_registered", label: "Not Registered", color: "red" },
+      ],
+    },
+    {
+      key: "mergeRequest",
+      label: "Merge Request",
+      type: "status",
+      group: "Status",
+      options: [
+        { value: "submitted", label: "Submitted", color: "green" },
+        { value: "not_submitted", label: "Not Submitted", color: "red" },
       ],
     },
     {
@@ -73,26 +76,27 @@ const DEFAULT_STATE = {
       ],
     },
     {
-      key: "artwork",
-      label: "Artwork",
-      type: "status",
-      group: "Status",
-      options: [
-        { value: "delivered", label: "Delivered", color: "green" },
-        { value: "not_delivered", label: "Not Delivered", color: "red" },
-        { value: "other", label: "Other", color: "amber", requiresNote: true },
-      ],
-    },
-    {
       key: "artProof",
       label: "Art Proof",
       type: "checklist",
       group: "Status",
       allowNote: true,
+      // Always-visible extra note boxes, independent of checklist completion.
+      extraNotes: [{ key: "link", label: "Link" }],
       items: [
         { key: "mockup", label: "Mock-up created" },
         { key: "shared", label: "Shared with team" },
         { key: "approved", label: "Approved by team" },
+      ],
+    },
+    {
+      key: "d2c",
+      label: "D2C",
+      type: "status",
+      group: "Status",
+      options: [
+        { value: "yes", label: "Yes", color: "green" },
+        { value: "no", label: "No", color: "red" },
       ],
     },
     {
@@ -105,32 +109,23 @@ const DEFAULT_STATE = {
           value: "yes",
           label: "Yes",
           color: "green",
-          // Picking this option reveals a second dropdown (International / Domestic / Both);
-          // whichever region(s) that resolves to get their own follow-up fields.
-          revealSelect: {
-            key: "region",
-            options: [
-              { value: "international", label: "International", items: ["international"] },
-              { value: "domestic", label: "Domestic", items: ["domestic"] },
-              { value: "both", label: "Both", items: ["international", "domestic"] },
-            ],
-            items: [
+          // Picking this option reveals an add-as-many-as-you-want list of plants, each
+          // tagged with its own region — rather than picking a region first.
+          revealList: {
+            key: "manufacturing::plants",
+            label: "Plants",
+            fields: [
+              { key: "plant", label: "Plant Name", type: "text", placeholder: "e.g. Memphis Record Pressing" },
               {
-                key: "international",
-                label: "International",
-                fields: [
-                  { key: "plant", label: "Plant Name", type: "text" },
-                  { key: "quantity", label: "Quantity", type: "text" },
+                key: "region",
+                label: "Region",
+                type: "select",
+                options: [
+                  { value: "international", label: "International" },
+                  { value: "domestic", label: "Domestic" },
                 ],
               },
-              {
-                key: "domestic",
-                label: "Domestic",
-                fields: [
-                  { key: "plant", label: "Plant Name", type: "text" },
-                  { key: "quantity", label: "Quantity", type: "text" },
-                ],
-              },
+              { key: "quantity", label: "Quantity", type: "text", placeholder: "e.g. 500 units" },
             ],
           },
         },
@@ -143,7 +138,7 @@ const DEFAULT_STATE = {
       type: "status",
       group: "AMPED",
       options: [
-        { value: "submitted", label: "Submitted", color: "green" },
+        { value: "submitted", label: "Submitted", color: "green", requiresNote: true, noteLabel: "Link" },
         { value: "not_submitted", label: "Not Submitted", color: "red" },
       ],
       // Shows a computed "Due: <date>" note and turns the box red once we're inside
@@ -167,7 +162,7 @@ const DEFAULT_STATE = {
       type: "status",
       group: "INTEGRAL",
       options: [
-        { value: "submitted", label: "Submitted", color: "green" },
+        { value: "submitted", label: "Submitted", color: "green", requiresNote: true, noteLabel: "Link" },
         { value: "not_submitted", label: "Not Submitted", color: "red" },
       ],
       dueRule: { weeksBefore: 10, referenceField: "streetDatePhysical", doneValue: "submitted" },
@@ -190,8 +185,9 @@ const DEFAULT_STATE = {
 };
 
 // Fields removed from DEFAULT_STATE that may still linger in a previously-saved state
-// (e.g. GS1 Registration moved from its own Status field to living under each Product entry).
-const REMOVED_FIELD_KEYS = ["gs1Registration"];
+// (e.g. GS1 Registration moved from its own Status field to living under each Product entry;
+// Title Registration was replaced by the simple Luminate Registration status field).
+const REMOVED_FIELD_KEYS = ["gs1Registration", "titleRegistration", "artwork"];
 
 // Merges in any default fields a previously-saved state doesn't have yet,
 // so the schema can grow in code without wiping data already in localStorage.
@@ -204,7 +200,7 @@ function mergeDefaultFields(loaded) {
       if (artist.notes) delete artist.notes[key];
     }
     // Manufacturing's plant name used to be stored at "manufacturing::<item>";
-    // it now lives at "manufacturing::<item>::plant" alongside a sibling quantity field.
+    // it later lived at "manufacturing::<item>::plant" alongside a sibling quantity field.
     if (artist.notes) {
       for (const itemKey of ["international", "domestic"]) {
         const oldKey = `manufacturing::${itemKey}`;
@@ -216,13 +212,51 @@ function mergeDefaultFields(loaded) {
       }
     }
     // Manufacturing's region used to be a checkbox pair at "manufacturing::checklist"
-    // ({international, domestic}); it's now a single dropdown at "manufacturing::region".
+    // ({international, domestic}); it later became a single dropdown at
+    // "manufacturing::region" gating one fixed Plant Name + Quantity per region.
     const oldChecklist = artist.values && artist.values["manufacturing::checklist"];
     if (oldChecklist && artist.values["manufacturing::region"] === undefined) {
       if (oldChecklist.international && oldChecklist.domestic) artist.values["manufacturing::region"] = "both";
       else if (oldChecklist.international) artist.values["manufacturing::region"] = "international";
       else if (oldChecklist.domestic) artist.values["manufacturing::region"] = "domestic";
       delete artist.values["manufacturing::checklist"];
+    }
+    // Manufacturing now supports any number of plants, each tagged with its own region,
+    // stored as a list at "manufacturing::plants". Fold the old single-plant-per-region
+    // shape (one Plant Name + Quantity note per region, gated by "manufacturing::region")
+    // into that list.
+    if (artist.values && artist.values["manufacturing::plants"] === undefined) {
+      const regionVal = artist.values["manufacturing::region"];
+      const activeRegions = regionVal === "both" ? ["international", "domestic"] : regionVal ? [regionVal] : [];
+      const plants = [];
+      for (const region of activeRegions) {
+        const plant = (artist.notes && artist.notes[`manufacturing::${region}::plant`]) || "";
+        const quantity = (artist.notes && artist.notes[`manufacturing::${region}::quantity`]) || "";
+        if (!plant && !quantity) continue;
+        const entry = { id: uid(), region };
+        if (plant) entry.plant = plant;
+        if (quantity) entry.quantity = quantity;
+        plants.push(entry);
+      }
+      if (plants.length) artist.values["manufacturing::plants"] = plants;
+    }
+    delete artist.values["manufacturing::region"];
+    if (artist.notes) {
+      for (const region of ["international", "domestic"]) {
+        delete artist.notes[`manufacturing::${region}::plant`];
+        delete artist.notes[`manufacturing::${region}::quantity`];
+      }
+    }
+    // PO# tracking (tried both as a per-entry field and a per-territory-row field) has
+    // been dropped entirely; strip any leftover values so they don't linger unused.
+    for (const field of loaded.fields) {
+      if (field.type !== "multi" || !field.entrySubList) continue;
+      const entries = Array.isArray(artist.values[field.key]) ? artist.values[field.key] : [];
+      for (const entry of entries) {
+        delete entry.poNumber;
+        const territories = Array.isArray(entry[field.entrySubList.key]) ? entry[field.entrySubList.key] : [];
+        for (const t of territories) delete t.poNumber;
+      }
     }
   }
 
@@ -239,14 +273,28 @@ function mergeDefaultFields(loaded) {
     if (field.allowNote && !existing.allowNote) {
       existing.allowNote = true;
     }
+    if (field.extraNotes && !existing.extraNotes) {
+      existing.extraNotes = structuredClone(field.extraNotes);
+    }
     if (field.entrySubStatus && !existing.entrySubStatus) {
       existing.entrySubStatus = structuredClone(field.entrySubStatus);
     }
     if (field.entrySubList && !existing.entrySubList) {
       existing.entrySubList = structuredClone(field.entrySubList);
+    } else if (field.entrySubList && existing.entrySubList) {
+      // Backfill any subfields added to entrySubList after this field was saved, and drop
+      // any that have since been removed (e.g. PO#).
+      const currentSubKeys = new Set(field.entrySubList.fields.map((f) => f.key));
+      existing.entrySubList.fields = existing.entrySubList.fields.filter((f) => currentSubKeys.has(f.key));
+      const existingSubKeys = new Set(existing.entrySubList.fields.map((f) => f.key));
+      for (const sub of field.entrySubList.fields) {
+        if (!existingSubKeys.has(sub.key)) existing.entrySubList.fields.push(structuredClone(sub));
+      }
     }
-    if (field.entryExtraField && !existing.entryExtraField) {
-      existing.entryExtraField = structuredClone(field.entryExtraField);
+    // PO# used to live in its own entryExtraField (an even older layout); drop any
+    // leftover config from that.
+    if (!field.entryExtraField && existing.entryExtraField) {
+      delete existing.entryExtraField;
     }
     if (field.dueRule && !existing.dueRule) {
       existing.dueRule = structuredClone(field.dueRule);
@@ -260,12 +308,22 @@ function mergeDefaultFields(loaded) {
           if (!existingValues.has(opt.value)) existing.options.push(structuredClone(opt));
           else {
             const existingOpt = existing.options.find((o) => o.value === opt.value);
-            // revealSelect is entirely code-defined (never user-edited), so always resync
-            // from the current schema rather than trying to detect drift. Also clears out
-            // a stale revealChecklist from before Manufacturing's region became a dropdown.
-            if (opt.revealSelect) {
-              existingOpt.revealSelect = structuredClone(opt.revealSelect);
-              delete existingOpt.revealChecklist;
+            // revealList (like the older revealSelect/revealChecklist it replaced) is
+            // entirely code-defined (never user-edited), so always resync from the
+            // current schema rather than trying to detect drift.
+            if (opt.revealList) {
+              existingOpt.revealList = structuredClone(opt.revealList);
+            }
+            delete existingOpt.revealSelect;
+            delete existingOpt.revealChecklist;
+            if (opt.allowCustomTitle && !existingOpt.allowCustomTitle) {
+              existingOpt.allowCustomTitle = true;
+            }
+            if (opt.requiresNote && !existingOpt.requiresNote) {
+              existingOpt.requiresNote = true;
+            }
+            if (opt.noteLabel && existingOpt.noteLabel !== opt.noteLabel) {
+              existingOpt.noteLabel = opt.noteLabel;
             }
           }
         }
@@ -421,35 +479,6 @@ function ensureMultiValue(artist, field) {
   return artist.values[field.key];
 }
 
-// "CD" for a plain option, "Other - LP Standard – Rolling Blackout [Black]" for one
-// with a custom title — used to identify a Product entry outside its own box (e.g. Title Registration).
-function resolveProductEntryDisplayLabel(field, entry) {
-  const opt = field.options.find((o) => o.value === entry.value);
-  const typeLabel = opt ? opt.label : entry.value;
-  if (opt && opt.allowCustomTitle && entry.title) return `${typeLabel} - ${entry.title}`;
-  return typeLabel;
-}
-
-// Reads (and lazily initializes) the {productEntryId: statusValue} map backing a
-// derivedList field.
-function ensureDerivedListValue(artist, field) {
-  const current = artist.values[field.key];
-  if (!current || typeof current !== "object" || Array.isArray(current)) {
-    artist.values[field.key] = {};
-  }
-  return artist.values[field.key];
-}
-
-// A derivedList field's rows aren't stored directly — they're computed each render
-// from whichever entries of its sourceField currently have a UPC set.
-function derivedListEntries(artist, field) {
-  const sourceField = state.fields.find((f) => f.key === field.sourceField);
-  if (!sourceField || !sourceField.entrySubStatus) return { sourceField, entries: [] };
-  const upcKey = sourceField.entrySubStatus.extraFieldKey;
-  const all = Array.isArray(artist.values[sourceField.key]) ? artist.values[sourceField.key] : [];
-  return { sourceField, entries: all.filter((e) => e.value && e[upcKey]) };
-}
-
 function renderBadge(field, rawValue) {
   const opt = field.options.find((o) => o.value === rawValue);
   if (!opt) return document.createTextNode(rawValue);
@@ -585,7 +614,7 @@ function renderArtistPage(artist) {
     let list = null;
     let currentBoxKey = null;
     for (const field of group.fields) {
-      const isOwnBox = field.type === "status" || field.type === "checklist" || field.type === "multi" || field.type === "derivedList";
+      const isOwnBox = field.type === "status" || field.type === "checklist" || field.type === "multi";
       const startsNewBox = isOwnBox || !list;
       if (startsNewBox) {
         currentBoxKey = field.key;
@@ -602,12 +631,6 @@ function renderArtistPage(artist) {
 
       if (field.type === "multi") {
         renderMultiField(list, artist, field, currentBoxKey);
-        list = null;
-        continue;
-      }
-
-      if (field.type === "derivedList") {
-        renderDerivedListField(list, artist, field, currentBoxKey);
         list = null;
         continue;
       }
@@ -629,10 +652,10 @@ function renderArtistPage(artist) {
         const current = artist.values[field.key] || "";
         const opt = field.options.find((o) => o.value === current);
         if (opt && opt.requiresNote) {
-          list.appendChild(renderNoteRow(artist, field));
+          list.appendChild(renderNoteRow(artist, field, opt.noteLabel));
         }
-        if (opt && opt.revealSelect) {
-          renderRevealSelect(list, artist, field, opt.revealSelect);
+        if (opt && opt.revealList) {
+          renderEntrySubList(list, artist.values, opt.revealList);
         }
         if (field.dueRule) {
           renderDueRuleBox(list, artist, field);
@@ -756,6 +779,30 @@ function renderChecklistField(list, artist, field, boxKey) {
   if (field.allowNote) {
     list.appendChild(renderNoteRow(artist, field));
   }
+  if (field.extraNotes) {
+    for (const extra of field.extraNotes) {
+      list.appendChild(renderExtraNoteRow(artist, field, extra));
+    }
+  }
+}
+
+// An always-visible note box independent of a checklist's completion state (e.g. a
+// link), keyed separately from the checklist's own "Details" note.
+function renderExtraNoteRow(artist, field, config) {
+  const notes = ensureNotes(artist);
+  const noteKey = `${field.key}::${config.key}`;
+  const valueDiv = el(
+    "div",
+    {
+      class: "field-value" + (notes[noteKey] ? "" : " placeholder"),
+      onclick: (e) => startEditKeyedNote(e.currentTarget, notes, noteKey),
+    },
+    notes[noteKey] || `Click to add ${config.label.toLowerCase()}…`
+  );
+  return el("div", { class: "field-row note-row" }, [
+    el("div", { class: "field-label" }, config.label),
+    valueDiv,
+  ]);
 }
 
 function colorStreetDatesBox(list, artist) {
@@ -836,9 +883,6 @@ function renderMultiField(list, artist, field, boxKey) {
         if (field.entrySubList) {
           delete entry[field.entrySubList.key];
         }
-        if (field.entryExtraField) {
-          delete entry[field.entryExtraField.key];
-        }
       }
       saveState();
       render();
@@ -893,110 +937,14 @@ function renderMultiField(list, artist, field, boxKey) {
     if (field.entrySubStatus && entry.value) {
       renderEntrySubStatusRows(list, entry, field.entrySubStatus);
     }
-    if (field.entryExtraField && entry.value) {
-      renderEntryExtraField(list, entry, field.entryExtraField);
-    }
     if (field.entrySubList && entry.value) {
       renderEntrySubList(list, entry, field.entrySubList);
     }
   });
 }
 
-// Renders a single always-visible follow-up text field under a product entry (e.g. PO#),
-// independent of any other per-entry status.
-function renderEntryExtraField(list, entry, config) {
-  const valueDiv = el(
-    "div",
-    {
-      class: "field-value" + (entry[config.key] ? "" : " placeholder"),
-      onclick: (e) => startEditEntryExtraField(e.currentTarget, entry, config),
-    },
-    entry[config.key] || "Click to set…"
-  );
-  list.appendChild(el("div", { class: "field-row note-row entry-sub-row" }, [
-    el("div", { class: "field-label" }, config.label),
-    valueDiv,
-  ]));
-}
-
-function startEditEntryExtraField(node, entry, config) {
-  const input = el("input", { type: "text", placeholder: config.placeholder || config.label });
-  input.value = entry[config.key] || "";
-  node.replaceWith(input);
-  input.focus();
-
-  const commit = () => {
-    const val = input.value.trim();
-    if (val) entry[config.key] = val;
-    else delete entry[config.key];
-    saveState();
-    setTimeout(render, 0);
-  };
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") input.blur();
-    if (e.key === "Escape") render();
-  });
-  input.addEventListener("blur", commit);
-}
-
 // Renders an add-as-many-as-you-want breakdown under a single product entry
-// (e.g. Territory Breakdown: territory + distributor + qty, repeatable).
-// Renders a derivedList field's box: one row per sourceField entry that has a UPC,
-// showing what it is (type/title), its UPC, and a Registered/Not Registered dropdown.
-// The row list itself is never edited directly — it always mirrors the source entries.
-function renderDerivedListField(list, artist, field, boxKey) {
-  const { sourceField, entries } = derivedListEntries(artist, field);
-  const statuses = ensureDerivedListValue(artist, field);
-  const upcKey = sourceField ? sourceField.entrySubStatus.extraFieldKey : "upc";
-  const registeredCount = entries.filter((e) => statuses[e.id] === "registered").length;
-  const summary = entries.length ? `${registeredCount}/${entries.length} registered` : "No UPCs yet";
-
-  if (entries.length) {
-    list.classList.add(registeredCount === entries.length ? "status-complete" : "status-pending");
-  }
-
-  list.appendChild(el("div", { class: "field-row" }, [
-    el("div", { class: "field-label" }, field.label),
-    el("span", { class: "multi-summary" }, summary),
-    renderCollapseToggle(artist, boxKey),
-    el("button", {
-      class: "btn-ghost remove-field",
-      title: "Remove this parameter (from all artists)",
-      onclick: () => removeField(field.key),
-    }, "✕"),
-  ]));
-
-  if (entries.length === 0) {
-    list.appendChild(el("div", { class: "field-row" }, [
-      el("div", { class: "field-value placeholder" }, "Set a UPC under Product to see it here."),
-    ]));
-    return;
-  }
-
-  for (const entry of entries) {
-    const currentOpt = field.options.find((o) => o.value === statuses[entry.id]);
-    const select = el("select", { class: currentOpt ? `status-select status-select-${currentOpt.color}` : "status-select" });
-    select.appendChild(el("option", { value: "" }, "— Select —"));
-    for (const opt of field.options) {
-      const optionEl = el("option", { value: opt.value }, opt.label);
-      if (opt.value === statuses[entry.id]) optionEl.selected = true;
-      select.appendChild(optionEl);
-    }
-    select.addEventListener("change", () => {
-      if (select.value) statuses[entry.id] = select.value;
-      else delete statuses[entry.id];
-      saveState();
-      render();
-    });
-
-    list.appendChild(el("div", { class: "field-row title-reg-row" }, [
-      el("div", { class: "field-label" }, resolveProductEntryDisplayLabel(sourceField, entry)),
-      el("span", { class: "title-reg-upc" }, entry[upcKey]),
-      select,
-    ]));
-  }
-}
-
+// (e.g. Territory Breakdown: territory + distributor + qty + PO#, repeatable).
 function renderEntrySubList(list, entry, config) {
   const items = Array.isArray(entry[config.key]) ? entry[config.key] : (entry[config.key] = []);
   const totalQty = items.reduce((sum, it) => sum + (Number(it.quantity) || 0), 0);
@@ -1020,23 +968,45 @@ function renderEntrySubList(list, entry, config) {
   items.forEach((item, idx) => {
     const rowChildren = [];
     for (const subfield of config.fields) {
-      const input = el("input", {
-        type: subfield.type === "number" ? "number" : "text",
-        placeholder: subfield.placeholder || subfield.label,
-      });
-      if (subfield.type === "number") input.min = "0";
-      input.value = item[subfield.key] != null ? item[subfield.key] : "";
-      input.addEventListener("blur", () => {
-        const val = input.value.trim();
-        if (val === "") delete item[subfield.key];
-        else item[subfield.key] = subfield.type === "number" ? Number(val) : val;
-        saveState();
-        setTimeout(render, 0);
-      });
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") input.blur();
-      });
-      rowChildren.push(input);
+      let control;
+      if (subfield.type === "select") {
+        control = el("select", {});
+        control.appendChild(el("option", { value: "" }, "— Select —"));
+        for (const opt of subfield.options) {
+          const optionEl = el("option", { value: opt.value }, opt.label);
+          if (opt.value === item[subfield.key]) optionEl.selected = true;
+          control.appendChild(optionEl);
+        }
+        control.addEventListener("change", () => {
+          if (control.value) item[subfield.key] = control.value;
+          else delete item[subfield.key];
+          saveState();
+          render();
+        });
+      } else {
+        control = el("input", {
+          type: subfield.type === "number" ? "number" : "text",
+          placeholder: subfield.placeholder || subfield.label,
+        });
+        if (subfield.type === "number") control.min = "0";
+        control.value = item[subfield.key] != null ? item[subfield.key] : "";
+        control.addEventListener("blur", () => {
+          const val = control.value.trim();
+          if (val === "") delete item[subfield.key];
+          else item[subfield.key] = subfield.type === "number" ? Number(val) : val;
+          saveState();
+          setTimeout(render, 0);
+        });
+        control.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") control.blur();
+        });
+      }
+      // A persistent label above the control, so it's still clear what each column is
+      // once you've filled something in (unlike a placeholder, which disappears then).
+      rowChildren.push(el("div", { class: `territory-field territory-field-${subfield.type === "number" ? "number" : "text"}` }, [
+        el("span", { class: "territory-field-label" }, subfield.label),
+        control,
+      ]));
     }
 
     rowChildren.push(el("button", {
@@ -1094,7 +1064,7 @@ function renderEntrySubStatusRows(list, entry, config) {
   }
 }
 
-function renderNoteRow(artist, field) {
+function renderNoteRow(artist, field, label = "Details") {
   const notes = ensureNotes(artist);
   const valueDiv = el(
     "div",
@@ -1102,10 +1072,10 @@ function renderNoteRow(artist, field) {
       class: "field-value" + (notes[field.key] ? "" : " placeholder"),
       onclick: (e) => startEditKeyedNote(e.currentTarget, notes, field.key),
     },
-    notes[field.key] || "Click to add details…"
+    notes[field.key] || `Click to add ${label.toLowerCase()}…`
   );
   return el("div", { class: "field-row note-row" }, [
-    el("div", { class: "field-label" }, "Details"),
+    el("div", { class: "field-label" }, label),
     valueDiv,
   ]);
 }
@@ -1130,82 +1100,6 @@ function startEditKeyedNote(node, notesObj, key) {
     if (e.key === "Escape") render();
   });
   textarea.addEventListener("blur", commit);
-}
-
-// Renders the secondary dropdown revealed by a status option (e.g. Manufacturing: Yes ->
-// International / Domestic / Both), then the follow-up fields for whichever item(s) that
-// selection resolves to (a "Both" option can activate more than one item at once).
-function renderRevealSelect(list, artist, field, config) {
-  const storageKey = `${field.key}::${config.key}`;
-  const current = artist.values[storageKey] || "";
-
-  const select = el("select", {});
-  select.appendChild(el("option", { value: "" }, "— Select —"));
-  for (const opt of config.options) {
-    const optionEl = el("option", { value: opt.value }, opt.label);
-    if (opt.value === current) optionEl.selected = true;
-    select.appendChild(optionEl);
-  }
-  select.addEventListener("change", () => {
-    artist.values[storageKey] = select.value;
-    saveState();
-    render();
-  });
-  list.appendChild(el("div", { class: "field-row note-row entry-sub-row" }, [
-    el("div", { class: "field-label" }, "Region"),
-    select,
-  ]));
-
-  const selectedOpt = config.options.find((o) => o.value === current);
-  const activeItemKeys = selectedOpt ? selectedOpt.items : [];
-  const notes = ensureNotes(artist);
-  for (const itemKey of activeItemKeys) {
-    const item = config.items.find((it) => it.key === itemKey);
-    if (!item) continue;
-    if (activeItemKeys.length > 1) {
-      list.appendChild(el("div", { class: "field-row note-row entry-sub-row" }, [
-        el("div", { class: "field-label" }, item.label),
-      ]));
-    }
-    for (const subfield of item.fields || []) {
-      const noteKey = `${field.key}::${item.key}::${subfield.key}`;
-      list.appendChild(renderRevealSubfieldRow(notes, noteKey, subfield));
-    }
-  }
-}
-
-function renderRevealSubfieldRow(notes, noteKey, subfield) {
-  if (subfield.type === "number") {
-    const input = el("input", { type: "number", min: "0", placeholder: "0" });
-    input.value = notes[noteKey] || "";
-    input.addEventListener("blur", () => {
-      const val = input.value.trim();
-      if (val === "") delete notes[noteKey];
-      else notes[noteKey] = val;
-      saveState();
-      setTimeout(render, 0);
-    });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") input.blur();
-    });
-    return el("div", { class: "field-row note-row entry-sub-row" }, [
-      el("div", { class: "field-label" }, subfield.label),
-      input,
-    ]);
-  }
-
-  const valueDiv = el(
-    "div",
-    {
-      class: "field-value" + (notes[noteKey] ? "" : " placeholder"),
-      onclick: (e) => startEditKeyedNote(e.currentTarget, notes, noteKey),
-    },
-    notes[noteKey] || "Click to set…"
-  );
-  return el("div", { class: "field-row note-row entry-sub-row" }, [
-    el("div", { class: "field-label" }, subfield.label),
-    valueDiv,
-  ]);
 }
 
 function startEditName(node, artist) {
@@ -1352,38 +1246,43 @@ function simpleHash(str) {
 
 // ---- Flattening an artist's simple parameters to/from [label, value] rows ----
 
+// AMPED and INTEGRAL mirror each other's field labels (One-Pager, Inventory), so those
+// two groups get their group name prefixed to keep sheet rows unique. Everything else
+// keeps its plain label.
+function paramLabel(field) {
+  if (field.group === "AMPED" || field.group === "INTEGRAL") return `${field.group}: ${field.label}`;
+  return field.label;
+}
+
 function syncBuildParameters(artist) {
-  const rows = [["Release", artist.release || ""]];
+  const rows = [["Artist", artist.name], ["Title", artist.release || ""]];
   const notes = artist.notes || {};
   for (const field of state.fields) {
-    if (field.type === "multi") continue; // Product/Territory get their own tables
+    if (field.type === "multi") continue; // Product/Territory get their own table
+    const label = paramLabel(field);
     if (field.type === "date" || field.type === "text") {
-      rows.push([field.label, artist.values[field.key] || ""]);
+      rows.push([label, artist.values[field.key] || ""]);
     } else if (field.type === "checklist") {
       const values = artist.values[field.key] || {};
       for (const item of field.items) {
-        rows.push([`${field.label}: ${item.label}`, values[item.key] ? "TRUE" : "FALSE"]);
+        rows.push([`${label}: ${item.label}`, values[item.key] ? "TRUE" : "FALSE"]);
       }
-      if (field.allowNote) rows.push([`${field.label}: Details`, notes[field.key] || ""]);
+      if (field.allowNote) rows.push([`${label}: Details`, notes[field.key] || ""]);
+      if (field.extraNotes) {
+        for (const extra of field.extraNotes) {
+          rows.push([`${label}: ${extra.label}`, notes[`${field.key}::${extra.key}`] || ""]);
+        }
+      }
     } else if (field.type === "status") {
       const raw = artist.values[field.key] || "";
       const opt = field.options.find((o) => o.value === raw);
-      rows.push([field.label, opt ? opt.label : ""]);
+      rows.push([label, opt ? opt.label : ""]);
       if (opt && opt.requiresNote) {
-        rows.push([`${field.label}: Details`, notes[field.key] || ""]);
+        rows.push([`${label}: ${opt.noteLabel || "Details"}`, notes[field.key] || ""]);
       }
-      if (opt && opt.revealSelect) {
-        const rc = opt.revealSelect;
-        const regionLabel = rc.key.charAt(0).toUpperCase() + rc.key.slice(1);
-        const regionVal = artist.values[`${field.key}::${rc.key}`] || "";
-        const regionOpt = rc.options.find((o) => o.value === regionVal);
-        rows.push([`${field.label}: ${regionLabel}`, regionOpt ? regionOpt.label : ""]);
-        for (const item of rc.items) {
-          for (const sub of item.fields || []) {
-            rows.push([`${field.label}: ${item.label} ${sub.label}`, notes[`${field.key}::${item.key}::${sub.key}`] || ""]);
-          }
-        }
-      }
+      // opt.revealList (e.g. Manufacturing's Plants) gets its own table — see
+      // findRevealListField/syncBuildRevealList — since it's a repeating list, not a
+      // simple key/value pair.
     }
   }
   return rows;
@@ -1397,56 +1296,102 @@ function syncApplyParameters(artist, rows) {
   );
 
   artist.notes = artist.notes || {};
-  const release = val("Release");
+  const release = val("Title");
   if (release) artist.release = release;
   else delete artist.release;
 
   for (const field of state.fields) {
     if (field.type === "multi") continue;
+    const label = paramLabel(field);
     if (field.type === "date" || field.type === "text") {
-      const v = val(field.label);
+      const v = val(label);
       if (v) artist.values[field.key] = v;
       else delete artist.values[field.key];
     } else if (field.type === "checklist") {
       const values = {};
       for (const item of field.items) {
-        const v = val(`${field.label}: ${item.label}`).toUpperCase();
+        const v = val(`${label}: ${item.label}`).toUpperCase();
         values[item.key] = v === "TRUE" || v === "YES" || v === "1";
       }
       artist.values[field.key] = values;
       if (field.allowNote) {
-        const detail = val(`${field.label}: Details`);
+        const detail = val(`${label}: Details`);
         if (detail) artist.notes[field.key] = detail;
         else delete artist.notes[field.key];
       }
+      if (field.extraNotes) {
+        for (const extra of field.extraNotes) {
+          const noteKey = `${field.key}::${extra.key}`;
+          const v = val(`${label}: ${extra.label}`);
+          if (v) artist.notes[noteKey] = v;
+          else delete artist.notes[noteKey];
+        }
+      }
     } else if (field.type === "status") {
-      const opt = matchOption(field.options, val(field.label));
+      const opt = matchOption(field.options, val(label));
       if (opt) artist.values[field.key] = opt.value;
       else delete artist.values[field.key];
 
       if (opt && opt.requiresNote) {
-        const detail = val(`${field.label}: Details`);
+        const detail = val(`${label}: ${opt.noteLabel || "Details"}`);
         if (detail) artist.notes[field.key] = detail;
         else delete artist.notes[field.key];
       }
-      if (opt && opt.revealSelect) {
-        const rc = opt.revealSelect;
-        const regionLabel = rc.key.charAt(0).toUpperCase() + rc.key.slice(1);
-        const regionOpt = matchOption(rc.options, val(`${field.label}: ${regionLabel}`));
-        const regionKey = `${field.key}::${rc.key}`;
-        if (regionOpt) artist.values[regionKey] = regionOpt.value;
-        else delete artist.values[regionKey];
-        for (const item of rc.items) {
-          for (const sub of item.fields || []) {
-            const noteKey = `${field.key}::${item.key}::${sub.key}`;
-            const v = val(`${field.label}: ${item.label} ${sub.label}`);
-            if (v) artist.notes[noteKey] = v;
-            else delete artist.notes[noteKey];
-          }
-        }
-      }
     }
   }
+}
+
+// ---- Manufacturing Plants table (any status option with a revealList) ----
+
+function findRevealListField() {
+  for (const field of state.fields) {
+    if (field.type !== "status") continue;
+    for (const opt of field.options) {
+      if (opt.revealList) return opt.revealList;
+    }
+  }
+  return null;
+}
+
+function syncBuildRevealList(artist) {
+  const config = findRevealListField();
+  if (!config) return [];
+  const items = Array.isArray(artist.values[config.key]) ? artist.values[config.key] : [];
+  return items.map((item) => {
+    if (!item.id) item.id = uid();
+    const cells = config.fields.map((f) => {
+      const raw = item[f.key];
+      if (f.type === "select") {
+        const opt = (f.options || []).find((o) => o.value === raw);
+        return opt ? opt.label : "";
+      }
+      return raw != null ? raw : "";
+    });
+    return [item.id, ...cells];
+  });
+}
+
+function syncApplyRevealList(artist, rows) {
+  const config = findRevealListField();
+  if (!config) return;
+  const newItems = rows.map((row) => {
+    const [rawId, ...values] = row;
+    const item = { id: (rawId || "").toString().trim() || uid() };
+    config.fields.forEach((f, i) => {
+      const raw = (values[i] || "").toString().trim();
+      if (!raw) return;
+      if (f.type === "select") {
+        const opt = (f.options || []).find(
+          (o) => o.label.toLowerCase() === raw.toLowerCase() || o.value.toLowerCase() === raw.toLowerCase()
+        );
+        if (opt) item[f.key] = opt.value;
+      } else {
+        item[f.key] = raw;
+      }
+    });
+    return item;
+  });
+  artist.values[config.key] = newItems;
 }
 
 // ---- Product + Territory Breakdown tables ----
@@ -1460,9 +1405,6 @@ function syncBuildProductAndTerritories(artist) {
   const product = [];
   const territories = [];
   if (!productField) return { product, territories };
-
-  const derivedField = state.fields.find((f) => f.type === "derivedList" && f.sourceField === productField.key);
-  const titleRegStatuses = derivedField ? ensureDerivedListValue(artist, derivedField) : {};
 
   const entries = Array.isArray(artist.values[productField.key]) ? artist.values[productField.key] : [];
   for (const entry of entries) {
@@ -1478,13 +1420,7 @@ function syncBuildProductAndTerritories(artist) {
       gs1Label = gs1Opt ? gs1Opt.label : "";
       upc = entry[cfg.extraFieldKey] || "";
     }
-    let titleRegLabel = "";
-    if (derivedField && upc) {
-      const statusOpt = derivedField.options.find((o) => o.value === titleRegStatuses[entry.id]);
-      titleRegLabel = statusOpt ? statusOpt.label : "";
-    }
-    const poNumber = productField.entryExtraField ? entry[productField.entryExtraField.key] || "" : "";
-    product.push([entry.id, opt ? opt.label : entry.value, title, entry.quantity != null ? entry.quantity : "", gs1Label, upc, titleRegLabel, poNumber]);
+    product.push([entry.id, opt ? opt.label : entry.value, title, entry.quantity != null ? entry.quantity : "", gs1Label, upc]);
 
     if (productField.entrySubList) {
       const items = Array.isArray(entry[productField.entrySubList.key]) ? entry[productField.entrySubList.key] : [];
@@ -1499,12 +1435,11 @@ function syncBuildProductAndTerritories(artist) {
 function syncApplyProductAndTerritories(artist, productRows, territoryRows) {
   const productField = findProductField();
   if (!productField) return;
-  const derivedField = state.fields.find((f) => f.type === "derivedList" && f.sourceField === productField.key);
 
   const toNumberOrUndefined = (v) => (v !== "" && v != null && !isNaN(Number(v)) ? Number(v) : undefined);
 
   const newEntries = productRows.map((row) => {
-    const [rawId, typeLabel, title, quantity, gs1Label, upc, , poNumber] = row;
+    const [rawId, typeLabel, title, quantity, gs1Label, upc] = row;
     const entry = { id: (rawId || "").toString().trim() || uid() };
 
     const opt = productField.options.find(
@@ -1524,9 +1459,6 @@ function syncApplyProductAndTerritories(artist, productRows, territoryRows) {
       );
       if (gs1Opt) entry[cfg.key] = gs1Opt.value;
       if (entry[cfg.key] === cfg.upcOnValue && upc) entry[cfg.extraFieldKey] = upc.toString().trim();
-    }
-    if (productField.entryExtraField && poNumber) {
-      entry[productField.entryExtraField.key] = poNumber.toString().trim();
     }
     return entry;
   });
@@ -1552,19 +1484,6 @@ function syncApplyProductAndTerritories(artist, productRows, territoryRows) {
     }
   }
 
-  if (derivedField) {
-    const statuses = {};
-    productRows.forEach((row, i) => {
-      const titleRegLabel = (row[6] || "").toString().trim();
-      if (!titleRegLabel) return;
-      const opt = derivedField.options.find(
-        (o) => o.label.toLowerCase() === titleRegLabel.toLowerCase() || o.value.toLowerCase() === titleRegLabel.toLowerCase()
-      );
-      if (opt) statuses[newEntries[i].id] = opt.value;
-    });
-    artist.values[derivedField.key] = statuses;
-  }
-
   artist.values[productField.key] = newEntries;
 }
 
@@ -1577,13 +1496,14 @@ async function syncPushNow(artist) {
   try {
     const parameters = syncBuildParameters(artist);
     const { product, territories } = syncBuildProductAndTerritories(artist);
-    saveState(); // persists any entry IDs syncBuildProductAndTerritories just backfilled
+    const plants = syncBuildRevealList(artist);
+    saveState(); // persists any entry IDs syncBuildProductAndTerritories/syncBuildRevealList just backfilled
     await fetch(SYNC_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "push", artist: artist.name, parameters, product, territories }),
+      body: JSON.stringify({ action: "push", artist: artist.name, parameters, product, territories, plants }),
     });
-    artist.syncHash = simpleHash(JSON.stringify({ parameters, product, territories }));
+    artist.syncHash = simpleHash(JSON.stringify({ parameters, product, territories, plants }));
     saveState();
     setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
   } catch (err) {
@@ -1608,7 +1528,7 @@ async function syncPullNow(artist, opts = {}) {
       return;
     }
 
-    const hash = simpleHash(JSON.stringify({ parameters: data.parameters, product: data.product, territories: data.territories }));
+    const hash = simpleHash(JSON.stringify({ parameters: data.parameters, product: data.product, territories: data.territories, plants: data.plants }));
     if (hash === artist.syncHash && !opts.force) {
       setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
       return;
@@ -1625,6 +1545,7 @@ async function syncPullNow(artist, opts = {}) {
 
     syncApplyParameters(artist, data.parameters);
     syncApplyProductAndTerritories(artist, data.product, data.territories);
+    syncApplyRevealList(artist, data.plants || []);
     artist.syncHash = hash;
     saveState();
     syncSuppressNextPush = true;
