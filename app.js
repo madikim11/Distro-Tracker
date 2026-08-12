@@ -1414,7 +1414,9 @@ function syncApplyRevealList(artist, rows) {
   artist.values[config.key] = newItems;
 }
 
-// ---- Product + Territory Breakdown tables ----
+// ---- Product + Territory Breakdown: one flat row per territory allocation ----
+// (Type/Title/UPC/GS1 repeat across every territory row for the same product, matching
+// how the source spreadsheet this format was modeled on denormalizes it.)
 
 function findProductField() {
   return state.fields.find((f) => f.type === "multi");
@@ -1422,15 +1424,15 @@ function findProductField() {
 
 function syncBuildProductAndTerritories(artist) {
   const productField = findProductField();
-  const product = [];
-  const territories = [];
-  if (!productField) return { product, territories };
+  const rows = [];
+  if (!productField) return rows;
 
   const entries = Array.isArray(artist.values[productField.key]) ? artist.values[productField.key] : [];
   for (const entry of entries) {
-    if (!entry.value) continue;
+    if (!entry.value || !productField.entrySubList) continue;
     if (!entry.id) entry.id = uid();
     const opt = productField.options.find((o) => o.value === entry.value);
+    const typeLabel = opt ? opt.label : entry.value;
     const title = opt && opt.allowCustomTitle ? entry.title || "" : "";
     let gs1Label = "";
     let upc = "";
@@ -1440,69 +1442,85 @@ function syncBuildProductAndTerritories(artist) {
       gs1Label = gs1Opt ? gs1Opt.label : "";
       upc = entry[cfg.extraFieldKey] || "";
     }
-    product.push([entry.id, opt ? opt.label : entry.value, title, entry.quantity != null ? entry.quantity : "", gs1Label, upc]);
-
-    if (productField.entrySubList) {
-      const items = Array.isArray(entry[productField.entrySubList.key]) ? entry[productField.entrySubList.key] : [];
-      for (const item of items) {
-        territories.push([entry.id, item.territory || "", item.distributor || "", item.quantity != null ? item.quantity : ""]);
-      }
+    const items = Array.isArray(entry[productField.entrySubList.key]) ? entry[productField.entrySubList.key] : [];
+    for (const item of items) {
+      rows.push([
+        entry.id,
+        typeLabel,
+        title,
+        upc,
+        gs1Label,
+        item.territory || "",
+        item.distributor || "",
+        item.quantity != null ? item.quantity : "",
+      ]);
     }
   }
-  return { product, territories };
+  return rows;
 }
 
-function syncApplyProductAndTerritories(artist, productRows, territoryRows) {
+function syncApplyProductAndTerritories(artist, rows) {
   const productField = findProductField();
   if (!productField) return;
+  // rows is null (not just []) when the Sheet hasn't been repushed in the flat
+  // Product/Territory layout yet — leave local product data alone rather than reading
+  // "nothing found at the new location" as "every product was deleted."
+  if (!Array.isArray(rows)) return;
 
   const toNumberOrUndefined = (v) => (v !== "" && v != null && !isNaN(Number(v)) ? Number(v) : undefined);
 
-  const newEntries = productRows.map((row) => {
-    const [rawId, typeLabel, title, quantity, gs1Label, upc] = row;
-    const entry = { id: (rawId || "").toString().trim() || uid() };
+  const oldEntries = Array.isArray(artist.values[productField.key]) ? artist.values[productField.key] : [];
+  const oldById = new Map(oldEntries.map((e) => [e.id, e]));
+
+  const groups = new Map();
+  const order = [];
+  for (const row of rows) {
+    const [rawId, typeLabel, title, upc, gs1Label, territory, distributor, quantity] = row;
+    const id = (rawId || "").toString().trim();
+    if (!id) continue;
+    if (!groups.has(id)) {
+      groups.set(id, { typeLabel, title, upc, gs1Label, territories: [] });
+      order.push(id);
+    }
+    const territoryEntry = {
+      id: uid(),
+      territory: (territory || "").toString().trim(),
+      distributor: (distributor || "").toString().trim(),
+    };
+    const qty = toNumberOrUndefined(quantity);
+    if (qty !== undefined) territoryEntry.quantity = qty;
+    groups.get(id).territories.push(territoryEntry);
+  }
+
+  const newEntries = order.map((id) => {
+    const group = groups.get(id);
+    const entry = { id };
 
     const opt = productField.options.find(
-      (o) => o.label.toLowerCase() === (typeLabel || "").toString().trim().toLowerCase()
-        || o.value.toLowerCase() === (typeLabel || "").toString().trim().toLowerCase()
+      (o) => o.label.toLowerCase() === (group.typeLabel || "").toString().trim().toLowerCase()
+        || o.value.toLowerCase() === (group.typeLabel || "").toString().trim().toLowerCase()
     );
     if (opt) entry.value = opt.value;
-    if (opt && opt.allowCustomTitle && title) entry.title = title.toString().trim();
-    const qty = toNumberOrUndefined(quantity);
-    if (qty !== undefined) entry.quantity = qty;
+    if (opt && opt.allowCustomTitle && group.title) entry.title = group.title.toString().trim();
 
     if (productField.entrySubStatus) {
       const cfg = productField.entrySubStatus;
       const gs1Opt = cfg.options.find(
-        (o) => o.label.toLowerCase() === (gs1Label || "").toString().trim().toLowerCase()
-          || o.value.toLowerCase() === (gs1Label || "").toString().trim().toLowerCase()
+        (o) => o.label.toLowerCase() === (group.gs1Label || "").toString().trim().toLowerCase()
+          || o.value.toLowerCase() === (group.gs1Label || "").toString().trim().toLowerCase()
       );
       if (gs1Opt) entry[cfg.key] = gs1Opt.value;
-      if (entry[cfg.key] === cfg.upcOnValue && upc) entry[cfg.extraFieldKey] = upc.toString().trim();
+      if (entry[cfg.key] === cfg.upcOnValue && group.upc) entry[cfg.extraFieldKey] = group.upc.toString().trim();
     }
+    if (productField.entrySubList) {
+      entry[productField.entrySubList.key] = group.territories;
+    }
+    // The flat sheet table only carries per-territory quantity, not the product's own
+    // top-level Qty — carry that forward from the existing local entry so it survives a pull.
+    const old = oldById.get(id);
+    if (old && old.quantity != null) entry.quantity = old.quantity;
     return entry;
   });
-
-  if (productField.entrySubList) {
-    const byProductId = new Map();
-    for (const row of territoryRows) {
-      const [productId, territory, distributor, quantity] = row;
-      const pid = (productId || "").toString().trim();
-      if (!pid) continue;
-      if (!byProductId.has(pid)) byProductId.set(pid, []);
-      const territoryEntry = {
-        id: uid(),
-        territory: (territory || "").toString().trim(),
-        distributor: (distributor || "").toString().trim(),
-      };
-      const qty = toNumberOrUndefined(quantity);
-      if (qty !== undefined) territoryEntry.quantity = qty;
-      byProductId.get(pid).push(territoryEntry);
-    }
-    for (const entry of newEntries) {
-      entry[productField.entrySubList.key] = byProductId.get(entry.id) || [];
-    }
-  }
 
   artist.values[productField.key] = newEntries;
 }
@@ -1515,15 +1533,15 @@ async function syncPushNow(artist) {
   setSyncStatusText("Syncing…");
   try {
     const parameters = syncBuildParameters(artist);
-    const { product, territories } = syncBuildProductAndTerritories(artist);
+    const productTerritory = syncBuildProductAndTerritories(artist);
     const plants = syncBuildRevealList(artist);
     saveState(); // persists any entry IDs syncBuildProductAndTerritories/syncBuildRevealList just backfilled
     await fetch(SYNC_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "push", artist: artist.name, parameters, product, territories, plants }),
+      body: JSON.stringify({ action: "push", artist: artist.name, parameters, productTerritory, plants }),
     });
-    artist.syncHash = simpleHash(JSON.stringify({ parameters, product, territories, plants }));
+    artist.syncHash = simpleHash(JSON.stringify({ parameters, productTerritory, plants }));
     saveState();
     setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
   } catch (err) {
@@ -1548,7 +1566,7 @@ async function syncPullNow(artist, opts = {}) {
       return;
     }
 
-    const hash = simpleHash(JSON.stringify({ parameters: data.parameters, product: data.product, territories: data.territories, plants: data.plants }));
+    const hash = simpleHash(JSON.stringify({ parameters: data.parameters, productTerritory: data.productTerritory, plants: data.plants }));
     if (hash === artist.syncHash && !opts.force) {
       setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
       return;
@@ -1564,7 +1582,7 @@ async function syncPullNow(artist, opts = {}) {
     }
 
     syncApplyParameters(artist, data.parameters);
-    syncApplyProductAndTerritories(artist, data.product, data.territories);
+    syncApplyProductAndTerritories(artist, data.productTerritory);
     syncApplyRevealList(artist, data.plants);
     artist.syncHash = hash;
     saveState();

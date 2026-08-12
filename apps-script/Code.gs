@@ -1,14 +1,21 @@
 // Distro Tracker backend — bind this script to the Google Sheet that will hold one
 // tab per artist. Each tab is fully owned by the sync (its layout is written by
-// pushArtist_ below); you can hand-edit the cell values, just don't rename the
-// section headers (PARAMETERS / PRODUCT / TERRITORY BREAKDOWN / MANUFACTURING PLANTS)
-// or column headers.
+// pushArtist_ below); you can hand-edit the cell values, just don't rename or move the
+// three column blocks:
+//   - Columns A-B: Parameters (Parameter | Value), one row per simple field
+//   - Columns D-K: Product / Territory Breakdown, one row per territory allocation
+//     (ID | Type | Title | UPC | GS1 Registration | Territory | Distributor / Location | Quantity)
+//   - Columns M-P: Manufacturing Plants (ID | Plant Name | Region | Quantity)
 //
 // Deploy: Extensions > Apps Script > paste this file's contents into Code.gs
 // > Deploy > New deployment > type: Web app > Execute as: Me >
 // Who has access: Anyone > Deploy. Copy the Web App URL into sync-config.js.
 
-var SECTION_WIDTH = 6;
+var LEFT_COL = 1; // A
+var PT_COL = 4; // D
+var PT_WIDTH = 8;
+var PLANTS_COL = 13; // M
+var PLANTS_WIDTH = 4;
 
 function doGet(e) {
   var action = e.parameter.action;
@@ -31,7 +38,7 @@ function doPost(e) {
   if (data.action === "push") {
     var artist = (data.artist || "").toString().trim();
     if (!artist) return jsonOutput_({ error: "artist required" });
-    pushArtist_(artist, data.parameters || [], data.product || [], data.territories || [], data.plants || []);
+    pushArtist_(artist, data.parameters || [], data.productTerritory || [], data.plants || []);
     return jsonOutput_({ success: true });
   }
   return jsonOutput_({ error: "unknown action" });
@@ -53,96 +60,98 @@ function cellText_(v) {
 
 function pullArtist_(artistName) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(artistName);
-  if (!sheet) return { exists: false, parameters: [], product: [], territories: [], plants: null };
+  if (!sheet) return { exists: false, parameters: [], productTerritory: null, plants: null };
 
-  var values = sheet.getDataRange().getValues();
+  var lastRow = sheet.getLastRow();
+  var dataRows = Math.max(lastRow - 1, 0);
+
+  // Columns A-B: Parameters. Row 1 is the "Parameter"/"Value" header.
   var parameters = [];
-  var product = [];
-  var territories = [];
-  var plants = [];
-  var sawPlantsSection = false; // this tab hasn't been repushed since Plants was added
-  var section = null;
-
-  for (var i = 0; i < values.length; i++) {
-    var row = values[i];
-    var a = cellText_(row[0]).trim();
-
-    if (a === "PARAMETERS") { section = "params"; continue; }
-    if (a === "PRODUCT") { section = "product"; continue; }
-    if (a === "TERRITORY BREAKDOWN") { section = "territory"; continue; }
-    if (a === "MANUFACTURING PLANTS") { section = "plants"; sawPlantsSection = true; continue; }
-    if (a === "Parameter" || a === "ID" || a === "Product ID") continue; // column header rows
-    if (a === "") continue; // blank separator rows
-
-    if (section === "params") {
-      parameters.push([a, cellText_(row[1])]);
-    } else if (section === "product") {
-      product.push([
-        a,
-        cellText_(row[1]),
-        cellText_(row[2]),
-        row[3],
-        cellText_(row[4]),
-        cellText_(row[5]),
-      ]);
-    } else if (section === "territory") {
-      territories.push([a, cellText_(row[1]), cellText_(row[2]), row[3]]);
-    } else if (section === "plants") {
-      plants.push([a, cellText_(row[1]), cellText_(row[2]), cellText_(row[3])]);
+  if (dataRows > 0) {
+    var leftValues = sheet.getRange(2, LEFT_COL, dataRows, 2).getValues();
+    for (var i = 0; i < leftValues.length; i++) {
+      var label = cellText_(leftValues[i][0]).trim();
+      if (!label) continue;
+      parameters.push([label, cellText_(leftValues[i][1])]);
     }
   }
 
-  return {
-    exists: true,
-    parameters: parameters,
-    product: product,
-    territories: territories,
-    plants: sawPlantsSection ? plants : null,
-  };
+  // Columns D-K: Product/Territory. Only trust this block if its header row is actually
+  // there — an older-format tab that hasn't been repushed since this moved from column A
+  // won't have it, and null (not []) signals the site to leave that data alone rather
+  // than reading "nothing at the new location" as "everything was deleted."
+  var productTerritory = null;
+  if (cellText_(sheet.getRange(1, PT_COL).getValue()).trim() === "ID") {
+    productTerritory = [];
+    if (dataRows > 0) {
+      var ptValues = sheet.getRange(2, PT_COL, dataRows, PT_WIDTH).getValues();
+      for (var j = 0; j < ptValues.length; j++) {
+        var id = cellText_(ptValues[j][0]).trim();
+        if (!id) continue;
+        productTerritory.push([
+          id,
+          cellText_(ptValues[j][1]),
+          cellText_(ptValues[j][2]),
+          cellText_(ptValues[j][3]),
+          cellText_(ptValues[j][4]),
+          cellText_(ptValues[j][5]),
+          cellText_(ptValues[j][6]),
+          ptValues[j][7],
+        ]);
+      }
+    }
+  }
+
+  // Columns M-P: Manufacturing Plants. Same null-vs-empty-array signal as above.
+  var plants = null;
+  if (cellText_(sheet.getRange(1, PLANTS_COL).getValue()).trim() === "ID") {
+    plants = [];
+    if (dataRows > 0) {
+      var plantValues = sheet.getRange(2, PLANTS_COL, dataRows, PLANTS_WIDTH).getValues();
+      for (var k = 0; k < plantValues.length; k++) {
+        var pid = cellText_(plantValues[k][0]).trim();
+        if (!pid) continue;
+        plants.push([pid, cellText_(plantValues[k][1]), cellText_(plantValues[k][2]), cellText_(plantValues[k][3])]);
+      }
+    }
+  }
+
+  return { exists: true, parameters: parameters, productTerritory: productTerritory, plants: plants };
 }
 
-function pushArtist_(artistName, parameters, product, territories, plants) {
+function pushArtist_(artistName, parameters, productTerritory, plants) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(artistName);
   if (!sheet) sheet = ss.insertSheet(artistName);
   sheet.clear();
 
-  var rows = [];
-  rows.push(["PARAMETERS"]);
-  rows.push(["Parameter", "Value"]);
-  parameters.forEach(function (p) { rows.push([p[0], p[1]]); });
-  rows.push([""]);
-  rows.push(["PRODUCT"]);
-  rows.push(["ID", "Type", "Title", "Quantity", "GS1 Registration", "UPC"]);
-  product.forEach(function (p) { rows.push(p); });
-  rows.push([""]);
-  rows.push(["TERRITORY BREAKDOWN"]);
-  rows.push(["Product ID", "Territory", "Distributor / Location", "Quantity"]);
-  territories.forEach(function (t) { rows.push(t); });
-  rows.push([""]);
-  rows.push(["MANUFACTURING PLANTS"]);
-  rows.push(["ID", "Plant Name", "Region", "Quantity"]);
-  (plants || []).forEach(function (p) { rows.push(p); });
+  // Columns A-B: Parameters
+  var leftRows = [["Parameter", "Value"]];
+  parameters.forEach(function (p) { leftRows.push([p[0], p[1]]); });
+  sheet.getRange(1, LEFT_COL, leftRows.length, 2).setValues(leftRows);
+  sheet.getRange(1, LEFT_COL, 1, 2).setFontWeight("bold");
 
-  rows = rows.map(function (r) {
+  // Columns D-K: Product/Territory (one row per territory allocation)
+  var ptHeader = ["ID", "Type", "Title", "UPC", "GS1 Registration", "Territory", "Distributor / Location", "Quantity"];
+  var ptRows = [ptHeader].concat(productTerritory || []).map(function (r) {
     var padded = r.slice();
-    while (padded.length < SECTION_WIDTH) padded.push("");
+    while (padded.length < PT_WIDTH) padded.push("");
     return padded;
   });
+  sheet.getRange(1, PT_COL, ptRows.length, PT_WIDTH).setValues(ptRows);
+  sheet.getRange(1, PT_COL, 1, PT_WIDTH).setFontWeight("bold");
 
-  sheet.getRange(1, 1, rows.length, SECTION_WIDTH).setValues(rows);
-  sheet.getRange(1, 1).setFontWeight("bold");
-  sheet.getRange(2, 1, 1, 2).setFontWeight("bold");
-  var productHeaderRow = 4 + parameters.length + 2;
-  sheet.getRange(productHeaderRow - 1, 1).setFontWeight("bold");
-  sheet.getRange(productHeaderRow, 1, 1, SECTION_WIDTH).setFontWeight("bold");
-  var territoryHeaderRow = productHeaderRow + product.length + 2;
-  sheet.getRange(territoryHeaderRow - 1, 1).setFontWeight("bold");
-  sheet.getRange(territoryHeaderRow, 1, 1, 4).setFontWeight("bold");
-  var plantsHeaderRow = territoryHeaderRow + territories.length + 2;
-  sheet.getRange(plantsHeaderRow - 1, 1).setFontWeight("bold");
-  sheet.getRange(plantsHeaderRow, 1, 1, 4).setFontWeight("bold");
-  sheet.autoResizeColumns(1, SECTION_WIDTH);
+  // Columns M-P: Manufacturing Plants
+  var plantsHeader = ["ID", "Plant Name", "Region", "Quantity"];
+  var plantsRows = [plantsHeader].concat(plants || []).map(function (r) {
+    var padded = r.slice();
+    while (padded.length < PLANTS_WIDTH) padded.push("");
+    return padded;
+  });
+  sheet.getRange(1, PLANTS_COL, plantsRows.length, PLANTS_WIDTH).setValues(plantsRows);
+  sheet.getRange(1, PLANTS_COL, 1, PLANTS_WIDTH).setFontWeight("bold");
+
+  sheet.autoResizeColumns(1, PLANTS_COL + PLANTS_WIDTH - 1);
 }
 
 function jsonOutput_(obj) {
