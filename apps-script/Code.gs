@@ -53,13 +53,14 @@ function cellText_(v) {
 
 function pullArtist_(artistName) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(artistName);
-  if (!sheet) return { exists: false, parameters: [], product: [], territories: [], plants: [] };
+  if (!sheet) return { exists: false, parameters: [], product: [], territories: [], plants: null };
 
   var values = sheet.getDataRange().getValues();
   var parameters = [];
   var product = [];
   var territories = [];
   var plants = [];
+  var sawPlantsSection = false; // this tab hasn't been repushed since Plants was added
   var section = null;
 
   for (var i = 0; i < values.length; i++) {
@@ -69,7 +70,7 @@ function pullArtist_(artistName) {
     if (a === "PARAMETERS") { section = "params"; continue; }
     if (a === "PRODUCT") { section = "product"; continue; }
     if (a === "TERRITORY BREAKDOWN") { section = "territory"; continue; }
-    if (a === "MANUFACTURING PLANTS") { section = "plants"; continue; }
+    if (a === "MANUFACTURING PLANTS") { section = "plants"; sawPlantsSection = true; continue; }
     if (a === "Parameter" || a === "ID" || a === "Product ID") continue; // column header rows
     if (a === "") continue; // blank separator rows
 
@@ -91,7 +92,13 @@ function pullArtist_(artistName) {
     }
   }
 
-  return { exists: true, parameters: parameters, product: product, territories: territories, plants: plants };
+  return {
+    exists: true,
+    parameters: parameters,
+    product: product,
+    territories: territories,
+    plants: sawPlantsSection ? plants : null,
+  };
 }
 
 function pushArtist_(artistName, parameters, product, territories, plants) {

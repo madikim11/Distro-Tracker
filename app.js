@@ -1290,52 +1290,68 @@ function syncBuildParameters(artist) {
 
 function syncApplyParameters(artist, rows) {
   const byLabel = new Map(rows.map((r) => [r[0], r[1]]));
+  // A label that isn't in the sheet at all (as opposed to present-but-blank) means this
+  // Sheet predates that label — e.g. it hasn't been repushed since a field was renamed or
+  // added. Treat that as "no signal" and leave the local value alone, rather than reading
+  // it as "cleared" and wiping data that just hasn't round-tripped through the new schema
+  // yet.
+  const hasLabel = (label) => byLabel.has(label);
   const val = (label) => (byLabel.get(label) || "").toString().trim();
   const matchOption = (options, label) => options.find(
     (o) => o.label.toLowerCase() === label.toLowerCase() || o.value.toLowerCase() === label.toLowerCase()
   );
 
   artist.notes = artist.notes || {};
-  const release = val("Title");
-  if (release) artist.release = release;
-  else delete artist.release;
+  if (hasLabel("Title")) {
+    const release = val("Title");
+    if (release) artist.release = release;
+    else delete artist.release;
+  }
 
   for (const field of state.fields) {
     if (field.type === "multi") continue;
     const label = paramLabel(field);
     if (field.type === "date" || field.type === "text") {
+      if (!hasLabel(label)) continue;
       const v = val(label);
       if (v) artist.values[field.key] = v;
       else delete artist.values[field.key];
     } else if (field.type === "checklist") {
+      if (!field.items.some((item) => hasLabel(`${label}: ${item.label}`))) continue;
       const values = {};
       for (const item of field.items) {
         const v = val(`${label}: ${item.label}`).toUpperCase();
         values[item.key] = v === "TRUE" || v === "YES" || v === "1";
       }
       artist.values[field.key] = values;
-      if (field.allowNote) {
+      if (field.allowNote && hasLabel(`${label}: Details`)) {
         const detail = val(`${label}: Details`);
         if (detail) artist.notes[field.key] = detail;
         else delete artist.notes[field.key];
       }
       if (field.extraNotes) {
         for (const extra of field.extraNotes) {
+          const noteLabel = `${label}: ${extra.label}`;
+          if (!hasLabel(noteLabel)) continue;
           const noteKey = `${field.key}::${extra.key}`;
-          const v = val(`${label}: ${extra.label}`);
+          const v = val(noteLabel);
           if (v) artist.notes[noteKey] = v;
           else delete artist.notes[noteKey];
         }
       }
     } else if (field.type === "status") {
+      if (!hasLabel(label)) continue;
       const opt = matchOption(field.options, val(label));
       if (opt) artist.values[field.key] = opt.value;
       else delete artist.values[field.key];
 
       if (opt && opt.requiresNote) {
-        const detail = val(`${label}: ${opt.noteLabel || "Details"}`);
-        if (detail) artist.notes[field.key] = detail;
-        else delete artist.notes[field.key];
+        const noteLabel = `${label}: ${opt.noteLabel || "Details"}`;
+        if (hasLabel(noteLabel)) {
+          const detail = val(noteLabel);
+          if (detail) artist.notes[field.key] = detail;
+          else delete artist.notes[field.key];
+        }
       }
     }
   }
@@ -1374,6 +1390,10 @@ function syncBuildRevealList(artist) {
 function syncApplyRevealList(artist, rows) {
   const config = findRevealListField();
   if (!config) return;
+  // rows is null (not just []) when the Sheet doesn't have a MANUFACTURING PLANTS section
+  // at all yet — an old-format Sheet that hasn't been repushed since this table was added.
+  // Leave local data alone rather than reading "section missing" as "list cleared."
+  if (!Array.isArray(rows)) return;
   const newItems = rows.map((row) => {
     const [rawId, ...values] = row;
     const item = { id: (rawId || "").toString().trim() || uid() };
@@ -1545,7 +1565,7 @@ async function syncPullNow(artist, opts = {}) {
 
     syncApplyParameters(artist, data.parameters);
     syncApplyProductAndTerritories(artist, data.product, data.territories);
-    syncApplyRevealList(artist, data.plants || []);
+    syncApplyRevealList(artist, data.plants);
     artist.syncHash = hash;
     saveState();
     syncSuppressNextPush = true;
