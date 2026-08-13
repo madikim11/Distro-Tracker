@@ -1444,10 +1444,14 @@ function syncBuildProductAndTerritories(artist) {
 
   const entries = Array.isArray(artist.values[productField.key]) ? artist.values[productField.key] : [];
   for (const entry of entries) {
-    if (!entry.value || !productField.entrySubList) continue;
+    // Include even a blank, just-added entry (no format type picked yet) — otherwise it's
+    // never represented in any push at all, so as soon as the push that adds it also
+    // clears the "unsynced changes pending" flag (even though it couldn't actually
+    // represent this entry), the very next poll wipes it before you've even chosen a type.
+    if (!productField.entrySubList) continue;
     if (!entry.id) entry.id = uid();
     const opt = productField.options.find((o) => o.value === entry.value);
-    const typeLabel = opt ? opt.label : entry.value;
+    const typeLabel = opt ? opt.label : (entry.value || "");
     const title = opt && opt.allowCustomTitle ? entry.title || "" : "";
     let gs1Label = "";
     let upc = "";
@@ -1562,11 +1566,20 @@ async function syncPushNow(artist) {
     const productTerritory = syncBuildProductAndTerritories(artist);
     const plants = syncBuildRevealList(artist);
     saveState(); // persists any entry IDs syncBuildProductAndTerritories/syncBuildRevealList just backfilled
-    await fetch(SYNC_URL, {
+    const res = await fetch(SYNC_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ action: "push", artist: artist.name, parameters, productTerritory, plants }),
     });
+    // fetch() only rejects on a true network failure — an HTTP error page (e.g. Apps
+    // Script occasionally serving Google's generic 404 instead of actually running)
+    // still resolves "successfully" here. Without checking the response, that would get
+    // treated as a real push: syncDirty clears, syncHash updates to data that was never
+    // actually written — and the next pull, fetching the real (unchanged) Sheet, would
+    // then overwrite the local edit that everyone thought had already synced.
+    if (!res.ok) throw new Error(`push failed: HTTP ${res.status}`);
+    const result = await res.json(); // throws if the body isn't real JSON (e.g. an error page)
+    if (result.error) throw new Error(result.error);
     artist.syncHash = simpleHash(JSON.stringify({ parameters, productTerritory, plants }));
     saveState();
     syncDirty = false;
@@ -1618,6 +1631,14 @@ async function syncPullNow(artist, opts = {}) {
     const isEditing = active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName) && appEl && appEl.contains(active);
     if (isEditing && !opts.force) {
       setSyncStatusText("Sheet changed — will refresh when you're done editing");
+      return;
+    }
+    // An edit can land (and go dirty) while this pull's fetch was still in flight —
+    // Apps Script can take a few seconds to respond. That edit hasn't been pushed yet,
+    // so applying this now-stale pulled data would overwrite it; let the pending push
+    // (already scheduled) supersede this pull instead.
+    if (syncDirty) {
+      setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
       return;
     }
 
@@ -1753,5 +1774,11 @@ window.addEventListener("hashchange", () => {
   }
   render();
 });
-window.addEventListener("DOMContentLoaded", render);
+// No DOMContentLoaded listener needed — this script runs after <div id="app"> in the
+// HTML (no defer/async), so the DOM is already ready by the time it executes. Adding one
+// anyway used to fire render() a second time moments later; since syncEnterArtist's
+// "already active for this artist" guard makes that second call a no-op, its paired
+// syncSchedulePush call would find the push-suppression flag already consumed and
+// schedule a spurious push — using whatever local data existed before the initial pull
+// had even finished, sometimes clobbering it.
 render();
