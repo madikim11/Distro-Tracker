@@ -1709,6 +1709,18 @@ function removeField(key) {
   render();
 }
 
-window.addEventListener("hashchange", render);
+// Clicking something inside the page (e.g. "← All artists") blurs whatever's focused
+// before its own click handler runs, so any in-progress edit commits first. Browser
+// Back/Forward skips that — it fires hashchange directly, and render() would wipe the
+// DOM (and an unsaved edit with it) before the field's blur handler ever got a chance to
+// save it. Force that blur here first so the edit commits either way.
+window.addEventListener("hashchange", () => {
+  const active = document.activeElement;
+  const appEl = document.getElementById("app");
+  if (active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName) && appEl && appEl.contains(active)) {
+    active.blur();
+  }
+  render();
+});
 window.addEventListener("DOMContentLoaded", render);
 render();
