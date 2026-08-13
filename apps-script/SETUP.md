@@ -42,8 +42,12 @@ after page load).
   also a **Sync now** button if you don't want to wait.
 - If you edit both sides within the same ~30-second window, the website's version wins
   for that round — there's no merge of conflicting changes.
-- Don't rename the `PARAMETERS` / `PRODUCT` / `TERRITORY BREAKDOWN` section headers or the
-  column header rows the sync writes — it reads a tab back by looking for those exact
-  labels. Everything else (the actual values) is yours to edit freely, and you can add or
-  remove Product/Territory rows — a blank `ID` or `Product ID` cell just means "this is a
-  new row," and the site will assign it an ID on the next push.
+- Each artist's tab has three column blocks side by side: **A-B** (simple parameters),
+  **D-K** (Product/Territory, one row per territory allocation), and **M-P** (Manufacturing
+  Plants). Don't move these blocks or rename their header rows (`Parameter`/`Value`,
+  `ID`/`Type`/etc.) — the sync finds them by looking for those exact labels in those exact
+  columns. Everything else (the actual values) is yours to edit freely, and you can add or
+  remove rows in the D-K/M-P blocks — a blank `ID` cell just means "this is a new row," and
+  the site will assign it an ID on the next push.
+- Formatting (colors, fonts, borders, column widths) is entirely yours to control — pushes
+  only clear and rewrite cell values, never formatting or column sizing.

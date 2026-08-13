@@ -6,6 +6,8 @@
 //   - Columns D-K: Product / Territory Breakdown, one row per territory allocation
 //     (ID | Type | Title | UPC | GS1 Registration | Territory | Distributor / Location | Quantity)
 //   - Columns M-P: Manufacturing Plants (ID | Plant Name | Region | Quantity)
+// Formatting (colors, fonts, borders, column widths) is yours to set by hand — pushes
+// only ever clear and rewrite cell values, never formatting.
 //
 // Deploy: Extensions > Apps Script > paste this file's contents into Code.gs
 // > Deploy > New deployment > type: Web app > Execute as: Me >
@@ -123,7 +125,10 @@ function pushArtist_(artistName, parameters, productTerritory, plants) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(artistName);
   if (!sheet) sheet = ss.insertSheet(artistName);
-  sheet.clear();
+  // contentsOnly: wipe old values (so removed rows don't linger) without touching
+  // formatting — colors, fonts, borders, and column widths you set by hand stick around
+  // across pushes instead of getting reset every sync.
+  sheet.clear({ contentsOnly: true });
 
   // Columns A-B: Parameters
   var leftRows = [["Parameter", "Value"]];
@@ -151,7 +156,7 @@ function pushArtist_(artistName, parameters, productTerritory, plants) {
   sheet.getRange(1, PLANTS_COL, plantsRows.length, PLANTS_WIDTH).setValues(plantsRows);
   sheet.getRange(1, PLANTS_COL, 1, PLANTS_WIDTH).setFontWeight("bold");
 
-  sheet.autoResizeColumns(1, PLANTS_COL + PLANTS_WIDTH - 1);
+  // No auto-resize — column widths are yours to set and keep.
 }
 
 function jsonOutput_(obj) {
