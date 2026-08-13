@@ -1248,7 +1248,19 @@ function syncSchedulePush(artist) {
   }
   syncDirty = true;
   if (syncPushTimer) clearTimeout(syncPushTimer);
-  syncPushTimer = setTimeout(() => syncPushNow(artist), SYNC_PUSH_DEBOUNCE_MS);
+  syncPushTimer = setTimeout(() => syncAttemptPush(artist), SYNC_PUSH_DEBOUNCE_MS);
+}
+
+// syncPushNow silently no-ops if a pull happens to be in flight at that exact moment
+// (syncBusy) — retry shortly after instead of just dropping the push. Without this, a
+// dropped push just sits there relying on some later, unrelated pull or edit to notice
+// syncDirty and flush it — usually fine, but not guaranteed, and slower than it should be.
+function syncAttemptPush(artist) {
+  if (syncBusy) {
+    syncPushTimer = setTimeout(() => syncAttemptPush(artist), 500);
+    return;
+  }
+  syncPushNow(artist);
 }
 
 function simpleHash(str) {
