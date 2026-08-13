@@ -841,6 +841,7 @@ function renderMultiField(list, artist, field, boxKey) {
       class: "btn-secondary btn-small",
       onclick: () => {
         entries.push({ id: uid() });
+        ensureCollapsed(artist)[boxKey] = false; // so the new (still-blank) entry is actually visible
         saveState();
         render();
       },
