@@ -481,6 +481,28 @@ button {
   color: var(--text);
 }
 
+.note-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+.note-link {
+  color: var(--accent);
+  text-decoration: underline;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-link:hover {
+  color: var(--accent-hover);
+}
+.edit-link-btn {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
 /* ---------- status badges ---------- */
 
 .badge {

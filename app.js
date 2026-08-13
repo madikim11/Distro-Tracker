@@ -791,17 +791,9 @@ function renderChecklistField(list, artist, field, boxKey) {
 function renderExtraNoteRow(artist, field, config) {
   const notes = ensureNotes(artist);
   const noteKey = `${field.key}::${config.key}`;
-  const valueDiv = el(
-    "div",
-    {
-      class: "field-value" + (notes[noteKey] ? "" : " placeholder"),
-      onclick: (e) => startEditKeyedNote(e.currentTarget, notes, noteKey),
-    },
-    notes[noteKey] || `Click to add ${config.label.toLowerCase()}…`
-  );
   return el("div", { class: "field-row note-row" }, [
     el("div", { class: "field-label" }, config.label),
-    valueDiv,
+    renderNoteValueCell(notes, noteKey, config.label),
   ]);
 }
 
@@ -1066,18 +1058,35 @@ function renderEntrySubStatusRows(list, entry, config) {
 
 function renderNoteRow(artist, field, label = "Details") {
   const notes = ensureNotes(artist);
-  const valueDiv = el(
-    "div",
-    {
-      class: "field-value" + (notes[field.key] ? "" : " placeholder"),
-      onclick: (e) => startEditKeyedNote(e.currentTarget, notes, field.key),
-    },
-    notes[field.key] || `Click to add ${label.toLowerCase()}…`
-  );
   return el("div", { class: "field-row note-row" }, [
     el("div", { class: "field-label" }, label),
-    valueDiv,
+    renderNoteValueCell(notes, field.key, label),
   ]);
+}
+
+// Renders a note's value cell. A "Link" note with a value set shows a real, clickable
+// hyperlink (plus a small edit button) instead of the click-to-edit plain text used for
+// every other kind of note — clicking a link should open it, not drop you into editing.
+function renderNoteValueCell(notes, key, label) {
+  const current = notes[key] || "";
+  if (label === "Link" && current) {
+    const wrapper = el("div", { class: "field-value note-link-row" });
+    wrapper.appendChild(el("a", { class: "note-link", href: current, target: "_blank", rel: "noopener noreferrer" }, current));
+    wrapper.appendChild(el("button", {
+      class: "btn-ghost edit-link-btn",
+      title: "Edit link",
+      onclick: () => startEditKeyedNote(wrapper, notes, key),
+    }, "✎"));
+    return wrapper;
+  }
+  return el(
+    "div",
+    {
+      class: "field-value" + (current ? "" : " placeholder"),
+      onclick: (e) => startEditKeyedNote(e.currentTarget, notes, key),
+    },
+    current || `Click to add ${label.toLowerCase()}…`
+  );
 }
 
 // Generic click-to-edit textarea backing any {notesObj, key} pair — used both for a
