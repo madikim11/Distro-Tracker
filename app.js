@@ -1190,6 +1190,11 @@ let syncIntervalId = null;
 let syncPushTimer = null;
 let syncSuppressNextPush = false;
 let syncBusy = false;
+// True from the moment an edit schedules a push until that push actually lands. The
+// 30s poll runs on its own fixed clock regardless of what you're doing — without this,
+// a poll landing in the gap between "you added something" and "the debounced push 1.5s
+// later" pulls the Sheet's still-old data and silently wipes what you just added.
+let syncDirty = false;
 
 function syncEnabled() {
   return !!SYNC_URL;
@@ -1241,6 +1246,7 @@ function syncSchedulePush(artist) {
     syncSuppressNextPush = false;
     return;
   }
+  syncDirty = true;
   if (syncPushTimer) clearTimeout(syncPushTimer);
   syncPushTimer = setTimeout(() => syncPushNow(artist), SYNC_PUSH_DEBOUNCE_MS);
 }
@@ -1452,6 +1458,14 @@ function syncBuildProductAndTerritories(artist) {
       upc = entry[cfg.extraFieldKey] || "";
     }
     const items = Array.isArray(entry[productField.entrySubList.key]) ? entry[productField.entrySubList.key] : [];
+    if (items.length === 0) {
+      // A product with no territory breakdown yet would otherwise contribute zero rows
+      // to this flat table — and vanish entirely the next time it's pulled back in.
+      // Emit one placeholder row (blank territory/distributor/quantity) so the product
+      // itself survives a push/pull round-trip before you've had a chance to add any.
+      rows.push([entry.id, typeLabel, title, upc, gs1Label, "", "", ""]);
+      continue;
+    }
     for (const item of items) {
       rows.push([
         entry.id,
@@ -1491,12 +1505,15 @@ function syncApplyProductAndTerritories(artist, rows) {
       groups.set(id, { typeLabel, title, upc, gs1Label, territories: [] });
       order.push(id);
     }
-    const territoryEntry = {
-      id: uid(),
-      territory: (territory || "").toString().trim(),
-      distributor: (distributor || "").toString().trim(),
-    };
+    const territoryText = (territory || "").toString().trim();
+    const distributorText = (distributor || "").toString().trim();
     const qty = toNumberOrUndefined(quantity);
+    // A row with nothing in any of the territory columns is the placeholder row a
+    // territory-less product gets (see syncBuildProductAndTerritories) — it's there so
+    // the product itself survives the round-trip, not to represent a real, blank
+    // territory entry.
+    if (!territoryText && !distributorText && qty === undefined) continue;
+    const territoryEntry = { id: uid(), territory: territoryText, distributor: distributorText };
     if (qty !== undefined) territoryEntry.quantity = qty;
     groups.get(id).territories.push(territoryEntry);
   }
@@ -1552,6 +1569,7 @@ async function syncPushNow(artist) {
     });
     artist.syncHash = simpleHash(JSON.stringify({ parameters, productTerritory, plants }));
     saveState();
+    syncDirty = false;
     setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
   } catch (err) {
     setSyncStatusText("Sync error — will retry", true);
@@ -1562,6 +1580,19 @@ async function syncPushNow(artist) {
 
 async function syncPullNow(artist, opts = {}) {
   if (!syncEnabled() || syncBusy) return;
+  // There's a not-yet-pushed local edit (e.g. still inside the 1.5s debounce window
+  // after adding something). Pulling now would fetch the Sheet's still-old data and
+  // stomp on it — flush that pending push first (bypassing its debounce, since whatever
+  // triggered this pull means the debounce is moot anyway) rather than just declining to
+  // pull, so a poll landing in that window doesn't leave things stuck if the push failed.
+  if (syncDirty) {
+    if (syncPushTimer) {
+      clearTimeout(syncPushTimer);
+      syncPushTimer = null;
+    }
+    await syncPushNow(artist);
+    if (syncDirty) return; // push failed — syncPushNow already reported the error
+  }
   syncBusy = true;
   setSyncStatusText("Syncing…");
   try {
