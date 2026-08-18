@@ -1326,6 +1326,10 @@ function syncBuildParameters(artist) {
       rows.push([label, artist.values[field.key] || ""]);
     } else if (field.type === "checklist") {
       const values = artist.values[field.key] || {};
+      // A computed summary row (not read back on pull — the checklist's real state
+      // lives in the item rows below) so Art Proof gets the same colored-dropdown look
+      // as the status fields at a glance, instead of needing to scan every item.
+      rows.push([label, isChecklistComplete(field, values) ? "Completed" : "Incomplete"]);
       for (const item of field.items) {
         rows.push([`${label}: ${item.label}`, values[item.key] ? "TRUE" : "FALSE"]);
       }
@@ -1361,6 +1365,13 @@ function syncBuildParameterOptions() {
     if (field.type === "status" && field.options && field.options.length) {
       map[label] = { kind: "dropdown", options: field.options.map((o) => ({ label: o.label, color: o.color })) };
     } else if (field.type === "checklist") {
+      map[label] = {
+        kind: "dropdown",
+        options: [
+          { label: "Completed", color: "green" },
+          { label: "Incomplete", color: "red" },
+        ],
+      };
       for (const item of field.items) {
         map[`${label}: ${item.label}`] = { kind: "checkbox" };
       }
