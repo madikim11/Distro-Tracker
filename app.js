@@ -567,6 +567,7 @@ function render() {
   }
   syncExitArtist();
   app.appendChild(renderDashboard());
+  syncDiscoverArtists();
 }
 
 function renderDashboard() {
@@ -1234,6 +1235,9 @@ let syncDirty = false;
 // tab" prompt) as OK to seed with a new tab this session — avoids re-asking on every
 // poll for an artist that's genuinely new.
 const syncSeedConfirmed = new Set();
+let syncDiscoverBusy = false;
+let syncLastDiscoverAt = 0;
+const SYNC_DISCOVER_MIN_INTERVAL_MS = 15000;
 
 function syncEnabled() {
   return !!SYNC_URL;
@@ -1277,6 +1281,38 @@ function syncExitArtist() {
     syncPushTimer = null;
   }
   syncActiveArtistId = null;
+}
+
+// Finds Sheet tabs that don't have a matching local artist yet — e.g. a tab created by
+// hand directly in the Sheet — and adds + pulls each one so it shows up on the
+// dashboard already populated instead of needing "+ Add Artist" first. Runs at most
+// once per SYNC_DISCOVER_MIN_INTERVAL_MS since the dashboard route re-renders (and so
+// re-calls this) on every local edit, not just on navigation.
+async function syncDiscoverArtists() {
+  if (!syncEnabled() || syncDiscoverBusy) return;
+  const now = Date.now();
+  if (now - syncLastDiscoverAt < SYNC_DISCOVER_MIN_INTERVAL_MS) return;
+  syncLastDiscoverAt = now;
+  syncDiscoverBusy = true;
+  try {
+    const res = await fetch(`${SYNC_URL}?action=list`);
+    const data = await res.json();
+    if (!Array.isArray(data.artists)) return;
+    const existingNames = new Set(state.artists.map((a) => a.name));
+    const newNames = data.artists.filter((name) => name && !existingNames.has(name));
+    if (!newNames.length) return;
+    for (const name of newNames) {
+      const artist = { id: slugify(name), name, values: {} };
+      state.artists.push(artist);
+      await syncPullNow(artist); // populate it now so the dashboard card isn't blank/red
+    }
+    saveState();
+    render();
+  } catch {
+    // best effort — a tab created directly in the Sheet will just show up on a later attempt
+  } finally {
+    syncDiscoverBusy = false;
+  }
 }
 
 function syncSchedulePush(artist) {

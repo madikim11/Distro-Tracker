@@ -26,6 +26,13 @@ function doGet(e) {
     if (!artist) return jsonOutput_({ error: "artist required" });
     return jsonOutput_(pullArtist_(artist));
   }
+  if (action === "list") {
+    // Every tab is an artist by convention (see the file header) — lets the site
+    // discover a tab you created directly in the Sheet instead of only ever finding
+    // artists it already knows about locally.
+    var names = SpreadsheetApp.getActiveSpreadsheet().getSheets().map(function (s) { return s.getName(); });
+    return jsonOutput_({ artists: names });
+  }
   return jsonOutput_({ error: "unknown action" });
 }
 
