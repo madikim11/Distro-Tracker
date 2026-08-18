@@ -1,29 +1,30 @@
 :root {
-  --bg: #f5f6f8;
-  --surface: #ffffff;
-  --border: #e2e4e9;
-  --text: #1a1d24;
-  --text-muted: #6b7280;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  --bg: #fdf1e3;
+  --surface: #fffaf3;
+  --border: #f0d9bc;
+  --text: #3a2a18;
+  --text-muted: #8a6d50;
+  --accent: #f0791d;
+  --accent-hover: #d9660f;
   --danger: #dc2626;
   --danger-hover: #b91c1c;
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow: 0 1px 2px rgba(120, 72, 20, 0.08), 0 1px 3px rgba(120, 72, 20, 0.1);
   --radius: 10px;
 }
 
+/* Always keep the light-orange theme, even when the system is in dark mode. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a;
-    --surface: #1d2027;
-    --border: #2c303a;
-    --text: #e8e9ec;
-    --text-muted: #9198a3;
-    --accent: #6366f1;
-    --accent-hover: #7678f4;
-    --danger: #f87171;
-    --danger-hover: #fca5a5;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+    --bg: #fdf1e3;
+    --surface: #fffaf3;
+    --border: #f0d9bc;
+    --text: #3a2a18;
+    --text-muted: #8a6d50;
+    --accent: #f0791d;
+    --accent-hover: #d9660f;
+    --danger: #dc2626;
+    --danger-hover: #b91c1c;
+    --shadow: 0 1px 2px rgba(120, 72, 20, 0.08), 0 1px 3px rgba(120, 72, 20, 0.1);
   }
 }
 
