@@ -38,8 +38,9 @@ after page load).
 - **Adding an artist** works from either side: use **+ Add Artist** on the site, or just
   create a new tab directly in the Sheet — the dashboard checks for tabs it doesn't
   already know about and pulls them in automatically (within ~15 seconds of loading the
-  dashboard). Every tab in the spreadsheet is treated as an artist, so don't keep any
-  unrelated tabs (notes, a template, etc.) in the same file.
+  dashboard). Every tab is treated as an artist **except** ones whose name starts with an
+  underscore (e.g. `_Scratchpad`) — use that prefix for anything in this spreadsheet
+  that isn't an artist tab, and the site will leave it alone entirely.
 - **Editing on the website** pushes to the Sheet automatically about 1.5 seconds after
   you stop typing/clicking.
 - **Editing the Sheet directly** gets pulled into the site the next time you load that

@@ -29,8 +29,12 @@ function doGet(e) {
   if (action === "list") {
     // Every tab is an artist by convention (see the file header) — lets the site
     // discover a tab you created directly in the Sheet instead of only ever finding
-    // artists it already knows about locally.
-    var names = SpreadsheetApp.getActiveSpreadsheet().getSheets().map(function (s) { return s.getName(); });
+    // artists it already knows about locally. A name starting with "_" (e.g.
+    // "_Scratchpad") opts a tab out, for anything you want in this spreadsheet that
+    // isn't an artist.
+    var names = SpreadsheetApp.getActiveSpreadsheet().getSheets()
+      .map(function (s) { return s.getName(); })
+      .filter(function (name) { return name.indexOf("_") !== 0; });
     return jsonOutput_({ artists: names });
   }
   return jsonOutput_({ error: "unknown action" });
