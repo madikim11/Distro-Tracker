@@ -1230,6 +1230,10 @@ let syncBusy = false;
 // a poll landing in the gap between "you added something" and "the debounced push 1.5s
 // later" pulls the Sheet's still-old data and silently wipes what you just added.
 let syncDirty = false;
+// Artist ids that have already been confirmed (via syncPullNow's "no matching Sheet
+// tab" prompt) as OK to seed with a new tab this session — avoids re-asking on every
+// poll for an artist that's genuinely new.
+const syncSeedConfirmed = new Set();
 
 function syncEnabled() {
   return !!SYNC_URL;
@@ -1698,6 +1702,22 @@ async function syncPullNow(artist, opts = {}) {
 
     if (!data.exists) {
       syncBusy = false;
+      // No Sheet tab matches this artist's name (matching is exact, including
+      // capitalization) — before silently creating one, make sure that's actually what's
+      // going on and not a typo that would orphan an existing tab with real data under a
+      // slightly different name. Ask only once per artist per session so a genuinely new
+      // artist doesn't get re-nagged on every ~30s poll.
+      if (!syncSeedConfirmed.has(artist.id)) {
+        const proceed = confirm(
+          `No Sheet tab named "${artist.name}" was found — syncing will create a new, empty one.\n\n` +
+          `If you meant to link to an existing tab, click Cancel and check the artist name matches the tab name exactly (including capitalization), then try again.`
+        );
+        if (!proceed) {
+          setSyncStatusText("Sync paused — no matching Sheet tab found", true);
+          return;
+        }
+        syncSeedConfirmed.add(artist.id);
+      }
       await syncPushNow(artist); // nothing in the Sheet yet for this artist — seed it
       return;
     }
