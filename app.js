@@ -479,6 +479,33 @@ function ensureMultiValue(artist, field) {
   return artist.values[field.key];
 }
 
+// A field counts as "filled" differently per type: a multi field (e.g. Product) needs
+// at least one entry with a type picked, a checklist needs every item checked, anything
+// else (status/date/text) just needs a truthy value.
+function isFieldFilled(field, artist) {
+  const raw = artist.values[field.key];
+  if (field.type === "multi") {
+    return Array.isArray(raw) && raw.some((entry) => !!entry.value);
+  }
+  if (field.type === "checklist") {
+    return isChecklistComplete(field, raw);
+  }
+  return !!raw;
+}
+
+// Fraction (0..1) of the current field schema that this artist has filled in — drives
+// the red/yellow/green gradient on the dashboard cards.
+function artistCompletion(artist) {
+  if (!state.fields.length) return 0;
+  const filled = state.fields.filter((field) => isFieldFilled(field, artist)).length;
+  return filled / state.fields.length;
+}
+
+// Maps a 0..1 completion fraction to a red -> yellow -> green hue (0 -> 60 -> 120).
+function completionHue(fraction) {
+  return Math.round(fraction * 120);
+}
+
 function renderBadge(field, rawValue) {
   const opt = field.options.find((o) => o.value === rawValue);
   if (!opt) return document.createTextNode(rawValue);
@@ -561,16 +588,22 @@ function renderDashboard() {
 
   const grid = el("div", { class: "artist-grid" });
   for (const artist of state.artists) {
+    const filledCount = state.fields.filter((field) => isFieldFilled(field, artist)).length;
+    const completion = state.fields.length ? filledCount / state.fields.length : 0;
+    const hue = completionHue(completion);
+
     const card = el(
       "div",
       {
         class: "artist-card",
+        style: `background: hsl(${hue}, 60%, 93%); border-color: hsl(${hue}, 55%, 72%);`,
         onclick: (e) => {
           if (e.target.closest(".remove-artist")) return;
           navigate(`#/artist/${encodeURIComponent(artist.id)}`);
         },
       },
       [
+        el("div", { class: "card-accent-bar", style: `background: hsl(${hue}, 65%, 46%);` }),
         el("button", {
           class: "btn-ghost remove-artist",
           title: "Remove artist",
@@ -580,6 +613,7 @@ function renderDashboard() {
           },
         }, "✕"),
         el("p", { class: "name" }, artist.name),
+        el("p", { class: "completion-note" }, `${filledCount}/${state.fields.length} filled`),
       ]
     );
     grid.appendChild(card);
