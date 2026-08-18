@@ -95,7 +95,7 @@ const DEFAULT_STATE = {
       type: "status",
       group: "Status",
       options: [
-        { value: "yes", label: "Yes", color: "green" },
+        { value: "yes", label: "Yes", color: "green", requiresNote: true, noteLabel: "Link" },
         { value: "no", label: "No", color: "red" },
       ],
     },
