@@ -378,6 +378,47 @@ function saveState() {
 
 let state = loadState();
 
+// ---- Edit lock ----
+// A soft deterrent, not real security: the password lives right here in this file's
+// source, and the Sheet's sync endpoint has no auth of its own — anyone who opens dev
+// tools, views source, or calls the endpoint directly can bypass this entirely. It only
+// stops casual viewers from clicking into edit controls; it's not a boundary for
+// sensitive data. Real access control would mean restricting the site and the Apps
+// Script backend to specific signed-in Google accounts, which is a much bigger change.
+const EDIT_UNLOCK_KEY = "distroTrackerEditUnlocked";
+const EDIT_PASSWORD_HASH = simpleHash("mikeisawesome");
+
+function isEditUnlocked() {
+  return localStorage.getItem(EDIT_UNLOCK_KEY) === "1";
+}
+
+function promptUnlockEditing() {
+  const attempt = prompt("Enter the editing password:");
+  if (attempt === null) return;
+  if (simpleHash(attempt) === EDIT_PASSWORD_HASH) {
+    localStorage.setItem(EDIT_UNLOCK_KEY, "1");
+    render();
+  } else {
+    alert("That's not it.");
+  }
+}
+
+function lockEditing() {
+  localStorage.removeItem(EDIT_UNLOCK_KEY);
+  render();
+}
+
+function renderEditLockRow() {
+  const unlocked = isEditUnlocked();
+  return el("div", { class: "edit-lock-row" }, [
+    el("span", { class: "edit-lock-status" }, unlocked ? "Editing unlocked" : "View only"),
+    el("button", {
+      class: "btn-ghost btn-small edit-lock-toggle",
+      onclick: unlocked ? lockEditing : promptUnlockEditing,
+    }, unlocked ? "Lock" : "Unlock editing"),
+  ]);
+}
+
 function slugify(text) {
   const base = text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   let id = base || "artist";
@@ -554,6 +595,8 @@ function navigate(hash) {
 function render() {
   const app = document.getElementById("app");
   app.innerHTML = "";
+  app.classList.toggle("read-only", !isEditUnlocked());
+  app.appendChild(renderEditLockRow());
   const hash = location.hash.replace(/^#\/?/, "");
   const match = hash.match(/^artist\/(.+)$/);
   if (match) {
@@ -1316,7 +1359,7 @@ async function syncDiscoverArtists() {
 }
 
 function syncSchedulePush(artist) {
-  if (!syncEnabled()) return;
+  if (!syncEnabled() || !isEditUnlocked()) return;
   if (syncSuppressNextPush) {
     syncSuppressNextPush = false;
     return;

@@ -45,6 +45,38 @@ body {
   padding: 40px 24px 80px;
 }
 
+/* ---------- edit lock ---------- */
+
+.edit-lock-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* Disables every control that mutates data — buttons, inputs, selects, textareas, and
+   the plain click-to-edit divs (field/release/note values, checklist labels, artist
+   name) — while leaving navigation (artist cards, back link), the sync-now refresh,
+   box-collapse toggles, the lock control itself, and any links inside a note usable. */
+#app.read-only button:not(.back-link):not(.sync-now-btn):not(.box-collapse-toggle):not(.edit-lock-toggle),
+#app.read-only input,
+#app.read-only select,
+#app.read-only textarea {
+  pointer-events: none;
+  opacity: 0.55;
+  cursor: default;
+}
+#app.read-only .field-value:not(.note-link-row),
+#app.read-only .release-value,
+#app.read-only .artist-name-heading h1,
+#app.read-only .checklist-label {
+  pointer-events: none;
+  cursor: default;
+}
+
 /* ---------- shared ---------- */
 
 .header-row {
