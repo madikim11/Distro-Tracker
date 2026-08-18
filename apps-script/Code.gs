@@ -40,7 +40,7 @@ function doPost(e) {
   if (data.action === "push") {
     var artist = (data.artist || "").toString().trim();
     if (!artist) return jsonOutput_({ error: "artist required" });
-    pushArtist_(artist, data.parameters || [], data.productTerritory || [], data.plants || []);
+    pushArtist_(artist, data.parameters || [], data.productTerritory || [], data.plants || [], data.parameterOptions || {});
     return jsonOutput_({ success: true });
   }
   return jsonOutput_({ error: "unknown action" });
@@ -121,7 +121,7 @@ function pullArtist_(artistName) {
   return { exists: true, parameters: parameters, productTerritory: productTerritory, plants: plants };
 }
 
-function pushArtist_(artistName, parameters, productTerritory, plants) {
+function pushArtist_(artistName, parameters, productTerritory, plants, parameterOptions) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(artistName);
   if (!sheet) sheet = ss.insertSheet(artistName);
@@ -135,6 +135,7 @@ function pushArtist_(artistName, parameters, productTerritory, plants) {
   parameters.forEach(function (p) { leftRows.push([p[0], p[1]]); });
   sheet.getRange(1, LEFT_COL, leftRows.length, 2).setValues(leftRows);
   sheet.getRange(1, LEFT_COL, 1, 2).setFontWeight("bold");
+  applyParameterFormatting_(sheet, leftRows, parameterOptions || {});
 
   // Columns D-K: Product/Territory (one row per territory allocation)
   var ptHeader = ["ID", "Type", "Title", "UPC", "GS1 Registration", "Territory", "Distributor / Location", "Quantity"];
@@ -157,6 +158,70 @@ function pushArtist_(artistName, parameters, productTerritory, plants) {
   sheet.getRange(1, PLANTS_COL, 1, PLANTS_WIDTH).setFontWeight("bold");
 
   // No auto-resize — column widths are yours to set and keep.
+}
+
+var STATUS_COLORS = {
+  green: { bg: "#e6f4ea", fg: "#137333" },
+  red: { bg: "#fce8e6", fg: "#c5221f" },
+  amber: { bg: "#fef7e0", fg: "#b06000" },
+  gray: { bg: "#f1f3f4", fg: "#5f6368" },
+  blue: { bg: "#e8f0fe", fg: "#1a73e8" },
+  purple: { bg: "#f3e8fd", fg: "#8430ce" },
+};
+
+// Turns each Parameters value cell into the same widget the website shows for that
+// field: a status field becomes a dropdown limited to its options, colored per option
+// like the site's badges; a checklist item becomes a real Sheets checkbox. parameterOptions
+// is keyed by the exact row label (e.g. "Music", "Art Proof: Mock-up created") sent
+// alongside the parameters this push — see syncBuildParameterOptions in app.js.
+function applyParameterFormatting_(sheet, leftRows, parameterOptions) {
+  var valueCol = LEFT_COL + 1; // B
+  var sheetId = sheet.getSheetId();
+
+  // Drop our own conditional formatting from a previous push (identified by targeting
+  // this sheet's Value column) before rebuilding it, so fields that were removed or
+  // reordered don't leave stale coloring behind. Rules on other ranges (e.g. anything
+  // added by hand elsewhere) are left untouched.
+  var rules = sheet.getConditionalFormatRules().filter(function (rule) {
+    return !rule.getRanges().some(function (r) {
+      return r.getColumn() === valueCol && r.getSheet().getSheetId() === sheetId;
+    });
+  });
+
+  for (var i = 1; i < leftRows.length; i++) { // row 0 is the header
+    var label = leftRows[i][0];
+    var config = parameterOptions[label];
+    var cell = sheet.getRange(i + 1, valueCol);
+    if (!config) {
+      cell.clearDataValidations();
+      continue;
+    }
+    if (config.kind === "checkbox") {
+      cell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox("TRUE", "FALSE").build());
+      continue;
+    }
+    if (config.kind === "dropdown" && config.options && config.options.length) {
+      var labels = config.options.map(function (o) { return o.label; });
+      cell.setDataValidation(
+        SpreadsheetApp.newDataValidation().requireValueInList(labels, true).setAllowInvalid(true).build()
+      );
+      config.options.forEach(function (opt) {
+        var colors = STATUS_COLORS[opt.color];
+        if (!colors) return;
+        rules.push(
+          SpreadsheetApp.newConditionalFormatRule()
+            .whenTextEqualTo(opt.label)
+            .setBackground(colors.bg)
+            .setFontColor(colors.fg)
+            .setBold(true)
+            .setRanges([cell])
+            .build()
+        );
+      });
+    }
+  }
+
+  sheet.setConditionalFormatRules(rules);
 }
 
 function jsonOutput_(obj) {

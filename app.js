@@ -1350,6 +1350,25 @@ function syncBuildParameters(artist) {
   return rows;
 }
 
+// Tells the Sheet what widget each Parameters row should use — a dropdown limited to
+// a status field's options (colored like the site's badges) or a real checkbox for a
+// checklist item — keyed by the exact row label syncBuildParameters wrote it under.
+function syncBuildParameterOptions() {
+  const map = {};
+  for (const field of state.fields) {
+    if (field.type === "multi") continue;
+    const label = paramLabel(field);
+    if (field.type === "status" && field.options && field.options.length) {
+      map[label] = { kind: "dropdown", options: field.options.map((o) => ({ label: o.label, color: o.color })) };
+    } else if (field.type === "checklist") {
+      for (const item of field.items) {
+        map[`${label}: ${item.label}`] = { kind: "checkbox" };
+      }
+    }
+  }
+  return map;
+}
+
 function syncApplyParameters(artist, rows) {
   const byLabel = new Map(rows.map((r) => [r[0], r[1]]));
   // A label that isn't in the sheet at all (as opposed to present-but-blank) means this
@@ -1610,13 +1629,14 @@ async function syncPushNow(artist) {
   setSyncStatusText("Syncing…");
   try {
     const parameters = syncBuildParameters(artist);
+    const parameterOptions = syncBuildParameterOptions();
     const productTerritory = syncBuildProductAndTerritories(artist);
     const plants = syncBuildRevealList(artist);
     saveState(); // persists any entry IDs syncBuildProductAndTerritories/syncBuildRevealList just backfilled
     const res = await fetch(SYNC_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "push", artist: artist.name, parameters, productTerritory, plants }),
+      body: JSON.stringify({ action: "push", artist: artist.name, parameters, parameterOptions, productTerritory, plants }),
     });
     // fetch() only rejects on a true network failure — an HTTP error page (e.g. Apps
     // Script occasionally serving Google's generic 404 instead of actually running)

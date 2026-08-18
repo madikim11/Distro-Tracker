@@ -50,4 +50,10 @@ after page load).
   remove rows in the D-K/M-P blocks — a blank `ID` cell just means "this is a new row," and
   the site will assign it an ID on the next push.
 - Formatting (colors, fonts, borders, column widths) is entirely yours to control — pushes
-  only clear and rewrite cell values, never formatting or column sizing.
+  only clear and rewrite cell values, never formatting or column sizing. The one exception
+  is the Parameters block's Value column (B): status fields (D2C, Music, Manufacturing,
+  etc.) get a dropdown limited to that field's options and a background color matching the
+  site's badge for whatever's selected, and checklist items (e.g. Art Proof's checkboxes)
+  get a real Sheets checkbox — both are rebuilt automatically on every push, so picking a
+  new value from the dropdown or ticking the checkbox is the easiest way to edit those rows
+  directly in the Sheet.
