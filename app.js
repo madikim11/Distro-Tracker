@@ -1331,7 +1331,7 @@ function syncBuildParameters(artist) {
       // as the status fields at a glance, instead of needing to scan every item.
       rows.push([label, isChecklistComplete(field, values) ? "Completed" : "Incomplete"]);
       for (const item of field.items) {
-        rows.push([`${label}: ${item.label}`, values[item.key] ? "TRUE" : "FALSE"]);
+        rows.push([`${label}: ${item.label}`, values[item.key] ? "Yes" : "No"]);
       }
       if (field.allowNote) rows.push([`${label}: Details`, notes[field.key] || ""]);
       if (field.extraNotes) {
@@ -1354,11 +1354,16 @@ function syncBuildParameters(artist) {
   return rows;
 }
 
-// Tells the Sheet what widget each Parameters row should use — a dropdown limited to
-// a status field's options (colored like the site's badges) or a real checkbox for a
-// checklist item — keyed by the exact row label syncBuildParameters wrote it under.
+// Tells the Sheet what widget each Parameters row should use — a colored dropdown
+// limited to a status field's options, a checklist's own Completed/Incomplete summary,
+// or a Yes/No dropdown for each of its items — keyed by the exact row label
+// syncBuildParameters wrote it under.
 function syncBuildParameterOptions() {
   const map = {};
+  const yesNo = [
+    { label: "Yes", color: "green" },
+    { label: "No", color: "red" },
+  ];
   for (const field of state.fields) {
     if (field.type === "multi") continue;
     const label = paramLabel(field);
@@ -1373,7 +1378,7 @@ function syncBuildParameterOptions() {
         ],
       };
       for (const item of field.items) {
-        map[`${label}: ${item.label}`] = { kind: "checkbox" };
+        map[`${label}: ${item.label}`] = { kind: "dropdown", options: yesNo };
       }
     }
   }

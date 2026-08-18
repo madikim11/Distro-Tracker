@@ -51,9 +51,9 @@ after page load).
   the site will assign it an ID on the next push.
 - Formatting (colors, fonts, borders, column widths) is entirely yours to control — pushes
   only clear and rewrite cell values, never formatting or column sizing. The one exception
-  is the Parameters block's Value column (B): status fields (D2C, Music, Manufacturing,
-  etc.) get a dropdown limited to that field's options and a background color matching the
-  site's badge for whatever's selected, and checklist items (e.g. Art Proof's checkboxes)
-  get a real Sheets checkbox — both are rebuilt automatically on every push, so picking a
-  new value from the dropdown or ticking the checkbox is the easiest way to edit those rows
-  directly in the Sheet.
+  is the Parameters block's Value column (B): every status field (D2C, Music, Manufacturing,
+  etc.), each checklist's own Completed/Incomplete summary row (e.g. Art Proof), and each
+  of that checklist's individual items (e.g. Art Proof: Mock-up created) get a dropdown
+  limited to their valid options with a background color matching the site's badge for
+  whatever's selected — rebuilt automatically on every push, so picking a new value from
+  the dropdown is the easiest way to edit those rows directly in the Sheet.

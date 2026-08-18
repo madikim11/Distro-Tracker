@@ -169,11 +169,12 @@ var STATUS_COLORS = {
   purple: { bg: "#f3e8fd", fg: "#8430ce" },
 };
 
-// Turns each Parameters value cell into the same widget the website shows for that
-// field: a status field becomes a dropdown limited to its options, colored per option
-// like the site's badges; a checklist item becomes a real Sheets checkbox. parameterOptions
-// is keyed by the exact row label (e.g. "Music", "Art Proof: Mock-up created") sent
-// alongside the parameters this push — see syncBuildParameterOptions in app.js.
+// Turns each Parameters value cell into a dropdown limited to its valid options,
+// colored per option like the site's badges — status fields, a checklist's own
+// Completed/Incomplete summary, and each of its individual items all work the same
+// way. parameterOptions is keyed by the exact row label (e.g. "Music",
+// "Art Proof: Mock-up created") sent alongside the parameters this push — see
+// syncBuildParameterOptions in app.js.
 function applyParameterFormatting_(sheet, leftRows, parameterOptions) {
   var valueCol = LEFT_COL + 1; // B
   var sheetId = sheet.getSheetId();
@@ -194,10 +195,6 @@ function applyParameterFormatting_(sheet, leftRows, parameterOptions) {
     var cell = sheet.getRange(i + 1, valueCol);
     if (!config) {
       cell.clearDataValidations();
-      continue;
-    }
-    if (config.kind === "checkbox") {
-      cell.setDataValidation(SpreadsheetApp.newDataValidation().requireCheckbox("TRUE", "FALSE").build());
       continue;
     }
     if (config.kind === "dropdown" && config.options && config.options.length) {
