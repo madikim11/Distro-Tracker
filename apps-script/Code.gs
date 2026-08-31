@@ -11,8 +11,10 @@
 //   - Columns M-P: Manufacturing Plants (ID | Plant Name | Region | Quantity)
 //   - Columns R-T: Shipping Links (ID | Link | Note)
 // Formatting (colors, fonts, borders, column widths) is yours to set by hand — pushes
-// only ever clear and rewrite cell values (plus the section-label row's merge/bold/
-// center, which — like the column headers below it — is owned by the sync, not you).
+// only ever clear and rewrite cell values, except the two header rows: row 1's merge/
+// bold/center, row 2's gray fill, and the black box outlining both — all owned by the
+// sync (see styleHeaderBlock_) so a brand new artist tab already looks right without
+// you re-applying it by hand.
 //
 // Deploy: Extensions > Apps Script > paste this file's contents into Code.gs
 // > Deploy > New deployment > type: Web app > Execute as: Me >
@@ -170,10 +172,10 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
   // across pushes instead of getting reset every sync.
   sheet.clear({ contentsOnly: true });
 
-  writeSectionLabel_(sheet, LEFT_COL, 2, "Checklist");
-  writeSectionLabel_(sheet, PT_COL, PT_WIDTH, "Distribution");
-  writeSectionLabel_(sheet, PLANTS_COL, PLANTS_WIDTH, "Manufacturing");
-  writeSectionLabel_(sheet, SHIP_COL, SHIP_WIDTH, "Shipping Links");
+  styleHeaderBlock_(sheet, LEFT_COL, 2, "Checklist");
+  styleHeaderBlock_(sheet, PT_COL, PT_WIDTH, "Distribution");
+  styleHeaderBlock_(sheet, PLANTS_COL, PLANTS_WIDTH, "Manufacturing");
+  styleHeaderBlock_(sheet, SHIP_COL, SHIP_WIDTH, "Shipping Links");
 
   // Columns A-B: Parameters
   var leftRows = [["Parameter", "Value"]];
@@ -215,16 +217,27 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
   // No auto-resize — column widths are yours to set and keep.
 }
 
-// Writes (and, the first time, merges) the section-label cell above one column block —
-// "Checklist" over A-B, "Distribution" over D-K, "Manufacturing" over M-P, "Shipping
-// Links" over R-T. Merging an already-merged range is a harmless no-op, so this is safe
-// to call on every push.
-function writeSectionLabel_(sheet, col, width, label) {
-  var range = sheet.getRange(SECTION_ROW, col, 1, width);
-  range.merge();
-  range.setValue(label);
-  range.setFontWeight("bold");
-  range.setHorizontalAlignment("center");
+var HEADER_FILL = "#f3f3f3";
+
+// Styles one column block's two-row header the way you'd set it up by hand — a merged,
+// bold, centered section label on row 1 ("Checklist" over A-B, "Distribution" over D-K,
+// "Manufacturing" over M-P, "Shipping Links" over R-T), a light gray fill on row 2's
+// column headers, and a solid black box outlining both rows together — so a brand new
+// artist tab (or any existing one, since this runs on every push) looks like this
+// automatically instead of needing it set by hand each time. Merging an already-merged
+// range, and re-applying the same background/border, are harmless no-ops, so this is
+// safe to call on every push.
+function styleHeaderBlock_(sheet, col, width, label) {
+  var sectionRange = sheet.getRange(SECTION_ROW, col, 1, width);
+  sectionRange.merge();
+  sectionRange.setValue(label);
+  sectionRange.setFontWeight("bold");
+  sectionRange.setHorizontalAlignment("center");
+
+  sheet.getRange(HEADER_ROW, col, 1, width).setBackground(HEADER_FILL);
+
+  sheet.getRange(SECTION_ROW, col, 2, width)
+    .setBorder(true, true, true, true, false, false, "black", SpreadsheetApp.BorderStyle.SOLID_MEDIUM);
 }
 
 var STATUS_COLORS = {

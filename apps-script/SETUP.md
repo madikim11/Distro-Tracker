@@ -61,10 +61,14 @@ after page load).
   push.
 - Formatting (colors, fonts, borders, column widths) is entirely yours to control — pushes
   only clear and rewrite cell values, never formatting or column sizing. The exceptions are
-  row 1's merged section labels, row 2's bolded headers, and the Parameters block's Value
-  column (B): every status field (D2C, Music, Manufacturing, etc.), each checklist's own
-  Completed/Incomplete summary row (e.g. Art Proof), and each of that checklist's
-  individual items (e.g. Art Proof: Mock-up created) get a dropdown limited to their valid
-  options with a background color matching the site's badge for whatever's selected — all
-  rebuilt automatically on every push, so picking a new value from the dropdown is the
-  easiest way to edit those rows directly in the Sheet.
+  the two header rows and the Parameters block's Value column (B). Every new artist tab
+  (and every existing one, since this is reapplied on every push) gets its two-row header
+  styled automatically: row 1's merged/bold/centered section labels, a light gray fill on
+  row 2's column headers, and a black box outlining both rows per block — so you never have
+  to set that up by hand again. In the Value column, every status field (D2C, Music,
+  Manufacturing, etc.), each checklist's own Completed/Incomplete summary row (e.g. Art
+  Proof), and each of that checklist's individual items (e.g. Art Proof: Mock-up created)
+  get a dropdown limited to their valid options with a background color matching the
+  site's badge for whatever's selected — also rebuilt automatically on every push, so
+  picking a new value from the dropdown is the easiest way to edit those rows directly in
+  the Sheet.
