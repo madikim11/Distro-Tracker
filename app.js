@@ -2,7 +2,7 @@ const STORAGE_KEY = "distroTrackerState";
 
 // Controls the visual order of parameter sections, independent of when fields were
 // added to the array (new fields merge in at the end of the array but still sort here).
-const GROUP_ORDER = ["Street Dates", "Type", "Status", "AMPED", "INTEGRAL"];
+const GROUP_ORDER = ["Street Dates", "Type", "Status", "AMPED", "INTEGRAL", "Shipping"];
 
 const DEFAULT_STATE = {
   fields: [
@@ -188,6 +188,16 @@ const DEFAULT_STATE = {
         { value: "not_received", label: "Not Received", color: "red" },
       ],
       dueRule: { weeksBefore: 3, referenceField: "streetDatePhysical", doneValue: "received" },
+    },
+    {
+      key: "shippingLinks",
+      label: "Shipping Links",
+      type: "list",
+      group: "Shipping",
+      fields: [
+        { key: "url", label: "Link", type: "text", placeholder: "https://..." },
+        { key: "note", label: "What it's for", type: "text", placeholder: "e.g. Test press shipment" },
+      ],
     },
   ],
   artists: [
@@ -555,6 +565,9 @@ function isFieldFilled(field, artist) {
   if (field.type === "checklist") {
     return isChecklistComplete(field, raw);
   }
+  if (field.type === "list") {
+    return Array.isArray(raw) && raw.some((entry) => entry.url || entry.note);
+  }
   return !!raw;
 }
 
@@ -730,12 +743,13 @@ function renderArtistPage(artist) {
   for (const group of groupFields(state.fields)) {
     container.appendChild(el("p", { class: "group-heading" }, group.name));
 
-    // Status, checklist, and multi fields each get their own box (any note/checkbox/entry
-    // rows ride along); other field types share one box within the group, same as before.
+    // Status, checklist, multi, and list fields each get their own box (any note/
+    // checkbox/entry rows ride along); other field types share one box within the
+    // group, same as before.
     let list = null;
     let currentBoxKey = null;
     for (const field of group.fields) {
-      const isOwnBox = field.type === "status" || field.type === "checklist" || field.type === "multi";
+      const isOwnBox = field.type === "status" || field.type === "checklist" || field.type === "multi" || field.type === "list";
       const startsNewBox = isOwnBox || !list;
       if (startsNewBox) {
         currentBoxKey = field.key;
@@ -752,6 +766,12 @@ function renderArtistPage(artist) {
 
       if (field.type === "multi") {
         renderMultiField(list, artist, field, currentBoxKey);
+        list = null;
+        continue;
+      }
+
+      if (field.type === "list") {
+        renderListField(list, artist, field, currentBoxKey);
         list = null;
         continue;
       }
@@ -1054,6 +1074,65 @@ function renderMultiField(list, artist, field, boxKey) {
     if (field.entrySubList && entry.value) {
       renderEntrySubList(list, entry, field.entrySubList);
     }
+  });
+}
+
+// A standalone add-as-many-as-you-want list (currently just Shipping Links: a URL plus
+// a free-text note on what it's for) — its own top-level box, unlike Territory
+// Breakdown/Manufacturing Plants which nest under another field's entry/option.
+function renderListField(list, artist, field, boxKey) {
+  const items = Array.isArray(artist.values[field.key]) ? artist.values[field.key] : (artist.values[field.key] = []);
+  const summary = items.length ? `${items.length} link${items.length > 1 ? "s" : ""}` : "No links yet";
+
+  list.appendChild(el("div", { class: "field-row" }, [
+    el("div", { class: "field-label" }, field.label),
+    el("span", { class: "multi-summary" }, summary),
+    el("button", {
+      class: "btn-secondary btn-small",
+      onclick: () => {
+        items.push({ id: uid() });
+        ensureCollapsed(artist)[boxKey] = false; // so the new (still-blank) entry is actually visible
+        saveState();
+        render();
+      },
+    }, "+ Add"),
+    renderCollapseToggle(artist, boxKey),
+    el("button", {
+      class: "btn-ghost remove-field",
+      title: "Remove this parameter (from all artists)",
+      onclick: () => removeField(field.key),
+    }, "✕"),
+  ]));
+
+  items.forEach((item, idx) => {
+    const rowChildren = field.fields.map((subfield) => {
+      const control = el("input", { type: "text", placeholder: subfield.placeholder || subfield.label });
+      control.value = item[subfield.key] || "";
+      control.addEventListener("blur", () => {
+        const val = control.value.trim();
+        if (val) item[subfield.key] = val;
+        else delete item[subfield.key];
+        saveState();
+        setTimeout(render, 0);
+      });
+      control.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") control.blur();
+      });
+      return el("div", { class: "territory-field territory-field-text" }, [
+        el("span", { class: "territory-field-label" }, subfield.label),
+        control,
+      ]);
+    });
+    rowChildren.push(el("button", {
+      class: "btn-ghost remove-field",
+      title: "Remove this entry",
+      onclick: () => {
+        items.splice(idx, 1);
+        saveState();
+        render();
+      },
+    }, "✕"));
+    list.appendChild(el("div", { class: "field-row territory-row" }, rowChildren));
   });
 }
 
@@ -1686,6 +1765,33 @@ function syncApplyRevealList(artist, rows) {
   artist.values[config.key] = newItems;
 }
 
+// Shipping Links: a plain top-level add-as-many-as-you-want list (Link + what it's
+// for), independent of any other field — unlike Manufacturing's Plants list, it isn't
+// gated behind a status selection, so it doesn't go through findRevealListField/
+// syncBuildRevealList above.
+function syncBuildShippingLinks(artist) {
+  const items = Array.isArray(artist.values.shippingLinks) ? artist.values.shippingLinks : [];
+  return items.map((item) => {
+    if (!item.id) item.id = uid();
+    return [item.id, item.url || "", item.note || ""];
+  });
+}
+
+function syncApplyShippingLinks(artist, rows) {
+  // rows is null (not just []) when the Sheet doesn't have a SHIPPING LINKS section at
+  // all yet — an old-format Sheet that hasn't been repushed since this table was added.
+  // Leave local data alone rather than reading "section missing" as "list cleared."
+  if (!Array.isArray(rows)) return;
+  const newItems = rows.map((row) => {
+    const [rawId, url, note] = row;
+    const item = { id: (rawId || "").toString().trim() || uid() };
+    if ((url || "").toString().trim()) item.url = url.toString().trim();
+    if ((note || "").toString().trim()) item.note = note.toString().trim();
+    return item;
+  });
+  artist.values.shippingLinks = newItems;
+}
+
 // ---- Product + Territory Breakdown: one flat row per territory allocation ----
 // (Type/Title/UPC/GS1 repeat across every territory row for the same product, matching
 // how the source spreadsheet this format was modeled on denormalizes it.)
@@ -1823,11 +1929,12 @@ async function syncPushNow(artist) {
     const parameterOptions = syncBuildParameterOptions();
     const productTerritory = syncBuildProductAndTerritories(artist);
     const plants = syncBuildRevealList(artist);
-    saveState(); // persists any entry IDs syncBuildProductAndTerritories/syncBuildRevealList just backfilled
+    const shippingLinks = syncBuildShippingLinks(artist);
+    saveState(); // persists any entry IDs syncBuildProductAndTerritories/syncBuildRevealList/syncBuildShippingLinks just backfilled
     const res = await fetch(SYNC_URL, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action: "push", artist: artist.name, parameters, parameterOptions, productTerritory, plants }),
+      body: JSON.stringify({ action: "push", artist: artist.name, parameters, parameterOptions, productTerritory, plants, shippingLinks }),
     });
     // fetch() only rejects on a true network failure — an HTTP error page (e.g. Apps
     // Script occasionally serving Google's generic 404 instead of actually running)
@@ -1838,7 +1945,7 @@ async function syncPushNow(artist) {
     if (!res.ok) throw new Error(`push failed: HTTP ${res.status}`);
     const result = await res.json(); // throws if the body isn't real JSON (e.g. an error page)
     if (result.error) throw new Error(result.error);
-    artist.syncHash = simpleHash(JSON.stringify({ parameters, productTerritory, plants }));
+    artist.syncHash = simpleHash(JSON.stringify({ parameters, productTerritory, plants, shippingLinks }));
     saveState();
     syncDirty = false;
     setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
@@ -1893,7 +2000,7 @@ async function syncPullNow(artist, opts = {}) {
       return;
     }
 
-    const hash = simpleHash(JSON.stringify({ parameters: data.parameters, productTerritory: data.productTerritory, plants: data.plants }));
+    const hash = simpleHash(JSON.stringify({ parameters: data.parameters, productTerritory: data.productTerritory, plants: data.plants, shippingLinks: data.shippingLinks }));
     if (hash === artist.syncHash && !opts.force) {
       setSyncStatusText(`Synced ${new Date().toLocaleTimeString()}`);
       return;
@@ -1919,6 +2026,7 @@ async function syncPullNow(artist, opts = {}) {
     syncApplyParameters(artist, data.parameters);
     syncApplyProductAndTerritories(artist, data.productTerritory);
     syncApplyRevealList(artist, data.plants);
+    syncApplyShippingLinks(artist, data.shippingLinks);
     artist.syncHash = hash;
     saveState();
     syncSuppressNextPush = true;

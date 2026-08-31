@@ -48,16 +48,17 @@ after page load).
   also a **Sync now** button if you don't want to wait.
 - If you edit both sides within the same ~30-second window, the website's version wins
   for that round — there's no merge of conflicting changes.
-- Each artist's tab has three column blocks side by side: **A-B** (simple parameters,
+- Each artist's tab has four column blocks side by side: **A-B** (simple parameters,
   labeled "Checklist"), **D-K** (Product/Territory, one row per territory allocation,
-  labeled "Distribution"), and **M-P** (Manufacturing Plants, labeled "Manufacturing").
-  Row 1 is a merged section-label cell above each block, row 2 is the actual column
-  headers (`Parameter`/`Value`, `ID`/`Type`/etc.), and row 3 onward is data. Don't move
-  these blocks or rename row 2's headers — the sync finds each block by looking for
-  those exact labels in those exact columns. Everything else (the actual values) is
-  yours to edit freely, and you can add or remove rows in the D-K/M-P blocks — a blank
-  `ID` cell just means "this is a new row," and the site will assign it an ID on the
-  next push.
+  labeled "Distribution"), **M-P** (Manufacturing Plants, labeled "Manufacturing"), and
+  **R-T** (Shipping Links, one row per link, labeled "Shipping Links"). Row 1 is a
+  merged section-label cell above each block, row 2 is the actual column headers
+  (`Parameter`/`Value`, `ID`/`Type`/etc.), and row 3 onward is data. Don't move these
+  blocks or rename row 2's headers — the sync finds each block by looking for those
+  exact labels in those exact columns. Everything else (the actual values) is yours to
+  edit freely, and you can add or remove rows in the D-K/M-P/R-T blocks — a blank `ID`
+  cell just means "this is a new row," and the site will assign it an ID on the next
+  push.
 - Formatting (colors, fonts, borders, column widths) is entirely yours to control — pushes
   only clear and rewrite cell values, never formatting or column sizing. The exceptions are
   row 1's merged section labels, row 2's bolded headers, and the Parameters block's Value

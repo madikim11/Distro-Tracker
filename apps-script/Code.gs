@@ -1,14 +1,15 @@
 // Distro Tracker backend — bind this script to the Google Sheet that will hold one
 // tab per artist. Each tab is fully owned by the sync (its layout is written by
 // pushArtist_ below); you can hand-edit the cell values, just don't rename or move the
-// three column blocks:
+// four column blocks:
 //   - Row 1: a merged section label above each block ("Checklist" / "Distribution" /
-//     "Manufacturing")
+//     "Manufacturing" / "Shipping Links")
 //   - Row 2: the actual column headers
 //   - Columns A-B: Parameters (Parameter | Value), one row per simple field
 //   - Columns D-K: Product / Territory Breakdown, one row per territory allocation
 //     (ID | Type | Title | UPC | GS1 Registration | Territory | Distributor / Location | Quantity)
 //   - Columns M-P: Manufacturing Plants (ID | Plant Name | Region | Quantity)
+//   - Columns R-T: Shipping Links (ID | Link | Note)
 // Formatting (colors, fonts, borders, column widths) is yours to set by hand — pushes
 // only ever clear and rewrite cell values (plus the section-label row's merge/bold/
 // center, which — like the column headers below it — is owned by the sync, not you).
@@ -22,6 +23,8 @@ var PT_COL = 4; // D
 var PT_WIDTH = 8;
 var PLANTS_COL = 13; // M
 var PLANTS_WIDTH = 4;
+var SHIP_COL = 18; // R
+var SHIP_WIDTH = 3;
 var SECTION_ROW = 1;
 var HEADER_ROW = 2;
 var DATA_START_ROW = 3;
@@ -58,7 +61,7 @@ function doPost(e) {
   if (data.action === "push") {
     var artist = (data.artist || "").toString().trim();
     if (!artist) return jsonOutput_({ error: "artist required" });
-    pushArtist_(artist, data.parameters || [], data.productTerritory || [], data.plants || [], data.parameterOptions || {});
+    pushArtist_(artist, data.parameters || [], data.productTerritory || [], data.plants || [], data.parameterOptions || {}, data.shippingLinks || []);
     return jsonOutput_({ success: true });
   }
   return jsonOutput_({ error: "unknown action" });
@@ -80,7 +83,7 @@ function cellText_(v) {
 
 function pullArtist_(artistName) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(artistName);
-  if (!sheet) return { exists: false, parameters: [], productTerritory: null, plants: null };
+  if (!sheet) return { exists: false, parameters: [], productTerritory: null, plants: null, shippingLinks: null };
 
   var lastRow = sheet.getLastRow();
   var dataRows = Math.max(lastRow - DATA_START_ROW + 1, 0);
@@ -141,10 +144,24 @@ function pullArtist_(artistName) {
     }
   }
 
-  return { exists: true, parameters: parameters, productTerritory: productTerritory, plants: plants };
+  // Columns R-T: Shipping Links. Same null-vs-empty-array signal as above.
+  var shippingLinks = null;
+  if (cellText_(sheet.getRange(HEADER_ROW, SHIP_COL).getValue()).trim() === "ID") {
+    shippingLinks = [];
+    if (dataRows > 0) {
+      var shipValues = sheet.getRange(DATA_START_ROW, SHIP_COL, dataRows, SHIP_WIDTH).getValues();
+      for (var m = 0; m < shipValues.length; m++) {
+        var shipId = cellText_(shipValues[m][0]).trim();
+        if (!shipId) continue;
+        shippingLinks.push([shipId, cellText_(shipValues[m][1]), cellText_(shipValues[m][2])]);
+      }
+    }
+  }
+
+  return { exists: true, parameters: parameters, productTerritory: productTerritory, plants: plants, shippingLinks: shippingLinks };
 }
 
-function pushArtist_(artistName, parameters, productTerritory, plants, parameterOptions) {
+function pushArtist_(artistName, parameters, productTerritory, plants, parameterOptions, shippingLinks) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(artistName);
   if (!sheet) sheet = ss.insertSheet(artistName);
@@ -156,6 +173,7 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
   writeSectionLabel_(sheet, LEFT_COL, 2, "Checklist");
   writeSectionLabel_(sheet, PT_COL, PT_WIDTH, "Distribution");
   writeSectionLabel_(sheet, PLANTS_COL, PLANTS_WIDTH, "Manufacturing");
+  writeSectionLabel_(sheet, SHIP_COL, SHIP_WIDTH, "Shipping Links");
 
   // Columns A-B: Parameters
   var leftRows = [["Parameter", "Value"]];
@@ -184,12 +202,23 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
   sheet.getRange(HEADER_ROW, PLANTS_COL, plantsRows.length, PLANTS_WIDTH).setValues(plantsRows);
   sheet.getRange(HEADER_ROW, PLANTS_COL, 1, PLANTS_WIDTH).setFontWeight("bold");
 
+  // Columns R-T: Shipping Links
+  var shipHeader = ["ID", "Link", "Note"];
+  var shipRows = [shipHeader].concat(shippingLinks || []).map(function (r) {
+    var padded = r.slice();
+    while (padded.length < SHIP_WIDTH) padded.push("");
+    return padded;
+  });
+  sheet.getRange(HEADER_ROW, SHIP_COL, shipRows.length, SHIP_WIDTH).setValues(shipRows);
+  sheet.getRange(HEADER_ROW, SHIP_COL, 1, SHIP_WIDTH).setFontWeight("bold");
+
   // No auto-resize — column widths are yours to set and keep.
 }
 
 // Writes (and, the first time, merges) the section-label cell above one column block —
-// "Checklist" over A-B, "Distribution" over D-K, "Manufacturing" over M-P. Merging an
-// already-merged range is a harmless no-op, so this is safe to call on every push.
+// "Checklist" over A-B, "Distribution" over D-K, "Manufacturing" over M-P, "Shipping
+// Links" over R-T. Merging an already-merged range is a harmless no-op, so this is safe
+// to call on every push.
 function writeSectionLabel_(sheet, col, width, label) {
   var range = sheet.getRange(SECTION_ROW, col, 1, width);
   range.merge();
