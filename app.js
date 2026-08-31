@@ -659,6 +659,24 @@ function renderDashboard() {
         }, "✕"),
         el("p", { class: "name" }, artist.name),
         el("p", { class: "completion-note" }, `${filledCount}/${state.fields.length} filled`),
+        el("div", { class: "card-move-row" }, [
+          el("button", {
+            class: "btn-ghost card-move-btn",
+            title: "Move to top",
+            onclick: (e) => {
+              e.stopPropagation();
+              moveArtist(artist.id, "top");
+            },
+          }, "↑"),
+          el("button", {
+            class: "btn-ghost card-move-btn",
+            title: "Move to bottom",
+            onclick: (e) => {
+              e.stopPropagation();
+              moveArtist(artist.id, "bottom");
+            },
+          }, "↓"),
+        ]),
       ]
     );
     grid.appendChild(card);
@@ -1903,6 +1921,18 @@ function removeArtist(id) {
   if (!artist) return;
   if (!confirm(`Remove "${artist.name}" from the tracker?`)) return;
   state.artists = state.artists.filter((a) => a.id !== id);
+  saveState();
+  render();
+}
+
+// Dashboard card order is purely local display state — it's never part of what gets
+// pushed to the Sheet, so reordering here only ever affects this browser.
+function moveArtist(id, to) {
+  const idx = state.artists.findIndex((a) => a.id === id);
+  if (idx === -1) return;
+  const [artist] = state.artists.splice(idx, 1);
+  if (to === "top") state.artists.unshift(artist);
+  else state.artists.push(artist);
   saveState();
   render();
 }

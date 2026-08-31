@@ -60,8 +60,9 @@ body {
 /* Disables every control that mutates data — buttons, inputs, selects, textareas, and
    the plain click-to-edit divs (field/release/note values, checklist labels, artist
    name) — while leaving navigation (artist cards, back link), the sync-now refresh,
-   box-collapse toggles, the lock control itself, and any links inside a note usable. */
-#app.read-only button:not(.back-link):not(.sync-now-btn):not(.box-collapse-toggle):not(.edit-lock-toggle),
+   box-collapse toggles, the lock control itself, card reordering (purely local display
+   order, never synced), and any links inside a note usable. */
+#app.read-only button:not(.back-link):not(.sync-now-btn):not(.box-collapse-toggle):not(.edit-lock-toggle):not(.card-move-btn),
 #app.read-only input,
 #app.read-only select,
 #app.read-only textarea {
@@ -211,6 +212,24 @@ button {
 }
 .artist-card:hover .remove-artist {
   opacity: 1;
+}
+
+.card-move-row {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+.artist-card:hover .card-move-row {
+  opacity: 1;
+}
+.card-move-btn {
+  padding: 2px 7px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .empty-state {
