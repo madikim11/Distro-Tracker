@@ -624,6 +624,7 @@ function renderDashboard() {
     el("button", { class: "btn-primary", onclick: addArtist }, "+ Add Artist"),
   ]);
   container.appendChild(header);
+  container.appendChild(renderDashboardSyncRow());
 
   if (state.artists.length === 0) {
     container.appendChild(el("div", { class: "empty-state" }, "No artists yet. Add one to get started."));
@@ -1331,31 +1332,80 @@ function syncExitArtist() {
 // dashboard already populated instead of needing "+ Add Artist" first. Runs at most
 // once per SYNC_DISCOVER_MIN_INTERVAL_MS since the dashboard route re-renders (and so
 // re-calls this) on every local edit, not just on navigation.
+// Returns the ids of any newly-discovered artists (each already pulled fresh), so a
+// caller like syncAllArtists that's about to pull everyone anyway can skip re-pulling
+// them a second time immediately after.
 async function syncDiscoverArtists() {
-  if (!syncEnabled() || syncDiscoverBusy) return;
+  if (!syncEnabled() || syncDiscoverBusy) return [];
   const now = Date.now();
-  if (now - syncLastDiscoverAt < SYNC_DISCOVER_MIN_INTERVAL_MS) return;
+  if (now - syncLastDiscoverAt < SYNC_DISCOVER_MIN_INTERVAL_MS) return [];
   syncLastDiscoverAt = now;
   syncDiscoverBusy = true;
   try {
     const res = await fetch(`${SYNC_URL}?action=list`);
     const data = await res.json();
-    if (!Array.isArray(data.artists)) return;
+    if (!Array.isArray(data.artists)) return [];
     const existingNames = new Set(state.artists.map((a) => a.name));
     const newNames = data.artists.filter((name) => name && !existingNames.has(name));
-    if (!newNames.length) return;
+    if (!newNames.length) return [];
+    const addedIds = [];
     for (const name of newNames) {
       const artist = { id: slugify(name), name, values: {} };
       state.artists.push(artist);
       await syncPullNow(artist); // populate it now so the dashboard card isn't blank/red
+      addedIds.push(artist.id);
     }
     saveState();
     render();
+    return addedIds;
   } catch {
     // best effort — a tab created directly in the Sheet will just show up on a later attempt
+    return [];
   } finally {
     syncDiscoverBusy = false;
   }
+}
+
+// syncBusy is a single shared lock — syncPullNow silently no-ops (not retries) if it's
+// already held, e.g. by the background sync this page kicks off on load. Without this,
+// a "Sync now" click landing in that window would skip most of its own pulls yet still
+// report "All synced" at the end. Gives up after 10s so a genuinely stuck lock can't
+// wedge this forever.
+function waitUntilSyncFree(timeoutMs = 10000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function poll() {
+      if (!syncBusy || Date.now() - start > timeoutMs) return resolve();
+      setTimeout(poll, 150);
+    })();
+  });
+}
+
+// The dashboard's "Sync now" — bypasses the discovery throttle and force-pulls every
+// known artist in turn (sequentially: syncPullNow/syncBusy is a single shared lock, so
+// firing these in parallel would just make every pull after the first no-op). Skips
+// artists syncDiscoverArtists just pulled fresh, so a cold sync doesn't fetch each one
+// twice in a row.
+async function syncAllArtists() {
+  if (!syncEnabled()) return;
+  setSyncStatusText("Syncing…");
+  syncLastDiscoverAt = 0;
+  await waitUntilSyncFree();
+  const justDiscovered = new Set(await syncDiscoverArtists());
+  for (const artist of state.artists) {
+    if (justDiscovered.has(artist.id)) continue;
+    await waitUntilSyncFree();
+    await syncPullNow(artist, { force: true });
+  }
+  setSyncStatusText(`All synced ${new Date().toLocaleTimeString()}`);
+}
+
+function renderDashboardSyncRow() {
+  if (!syncEnabled()) return el("div", {});
+  return el("p", { class: "sync-status-line" }, [
+    el("span", { id: "sync-status-text" }, "Not yet synced"),
+    el("button", { class: "btn-ghost sync-now-btn", onclick: syncAllArtists }, "Sync now"),
+  ]);
 }
 
 function syncSchedulePush(artist) {
