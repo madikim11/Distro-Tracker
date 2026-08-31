@@ -90,6 +90,17 @@ const DEFAULT_STATE = {
       ],
     },
     {
+      key: "testPressStatus",
+      label: "Test Press Status",
+      type: "status",
+      group: "Status",
+      options: [
+        { value: "incomplete", label: "Incomplete", color: "red" },
+        { value: "in_process", label: "In Process", color: "amber" },
+        { value: "approved", label: "Approved", color: "green" },
+      ],
+    },
+    {
       key: "d2c",
       label: "D2C",
       type: "status",
@@ -264,7 +275,9 @@ function mergeDefaultFields(loaded) {
   for (const field of DEFAULT_STATE.fields) {
     const existing = existingByKey.get(field.key);
     if (!existing) {
-      loaded.fields.push(structuredClone(field));
+      const cloned = structuredClone(field);
+      loaded.fields.push(cloned);
+      existingByKey.set(field.key, cloned); // so the reorder below can find it
       continue;
     }
     if (!existing.group && field.group) {
@@ -340,6 +353,17 @@ function mergeDefaultFields(loaded) {
       }
     }
   }
+
+  // Re-sort to match DEFAULT_STATE's field order (a newly-added field like Test Press
+  // Status would otherwise land at the very end of an existing saved state — it was
+  // only ever pushed onto the end above — instead of at the position it's actually
+  // defined at). Anything not in DEFAULT_STATE (a field added by hand via "+ Add
+  // Parameter") isn't reordered — those keep their existing relative order, appended
+  // after every default field.
+  const defaultKeys = new Set(DEFAULT_STATE.fields.map((f) => f.key));
+  const customFields = loaded.fields.filter((f) => !defaultKeys.has(f.key));
+  loaded.fields = DEFAULT_STATE.fields.map((f) => existingByKey.get(f.key)).concat(customFields);
+
   return loaded;
 }
 
