@@ -2,12 +2,16 @@
 // tab per artist. Each tab is fully owned by the sync (its layout is written by
 // pushArtist_ below); you can hand-edit the cell values, just don't rename or move the
 // three column blocks:
+//   - Row 1: a merged section label above each block ("Checklist" / "Distribution" /
+//     "Manufacturing")
+//   - Row 2: the actual column headers
 //   - Columns A-B: Parameters (Parameter | Value), one row per simple field
 //   - Columns D-K: Product / Territory Breakdown, one row per territory allocation
 //     (ID | Type | Title | UPC | GS1 Registration | Territory | Distributor / Location | Quantity)
 //   - Columns M-P: Manufacturing Plants (ID | Plant Name | Region | Quantity)
 // Formatting (colors, fonts, borders, column widths) is yours to set by hand — pushes
-// only ever clear and rewrite cell values, never formatting.
+// only ever clear and rewrite cell values (plus the section-label row's merge/bold/
+// center, which — like the column headers below it — is owned by the sync, not you).
 //
 // Deploy: Extensions > Apps Script > paste this file's contents into Code.gs
 // > Deploy > New deployment > type: Web app > Execute as: Me >
@@ -18,6 +22,9 @@ var PT_COL = 4; // D
 var PT_WIDTH = 8;
 var PLANTS_COL = 13; // M
 var PLANTS_WIDTH = 4;
+var SECTION_ROW = 1;
+var HEADER_ROW = 2;
+var DATA_START_ROW = 3;
 
 function doGet(e) {
   var action = e.parameter.action;
@@ -76,12 +83,17 @@ function pullArtist_(artistName) {
   if (!sheet) return { exists: false, parameters: [], productTerritory: null, plants: null };
 
   var lastRow = sheet.getLastRow();
-  var dataRows = Math.max(lastRow - 1, 0);
+  var dataRows = Math.max(lastRow - DATA_START_ROW + 1, 0);
 
-  // Columns A-B: Parameters. Row 1 is the "Parameter"/"Value" header.
+  // Columns A-B: Parameters. Row 2 is the "Parameter"/"Value" header (row 1 is the
+  // "Checklist" section label). Only trust this block if that header is actually
+  // there — an older-format tab that hasn't been repushed since the section-label row
+  // was added won't have it yet, and an empty (not stale/misaligned) parameters array
+  // signals the site to leave local data alone rather than misreading old row 2 (real
+  // data under the previous layout) as if it were the new header.
   var parameters = [];
-  if (dataRows > 0) {
-    var leftValues = sheet.getRange(2, LEFT_COL, dataRows, 2).getValues();
+  if (cellText_(sheet.getRange(HEADER_ROW, LEFT_COL).getValue()).trim() === "Parameter" && dataRows > 0) {
+    var leftValues = sheet.getRange(DATA_START_ROW, LEFT_COL, dataRows, 2).getValues();
     for (var i = 0; i < leftValues.length; i++) {
       var label = cellText_(leftValues[i][0]).trim();
       if (!label) continue;
@@ -94,10 +106,10 @@ function pullArtist_(artistName) {
   // won't have it, and null (not []) signals the site to leave that data alone rather
   // than reading "nothing at the new location" as "everything was deleted."
   var productTerritory = null;
-  if (cellText_(sheet.getRange(1, PT_COL).getValue()).trim() === "ID") {
+  if (cellText_(sheet.getRange(HEADER_ROW, PT_COL).getValue()).trim() === "ID") {
     productTerritory = [];
     if (dataRows > 0) {
-      var ptValues = sheet.getRange(2, PT_COL, dataRows, PT_WIDTH).getValues();
+      var ptValues = sheet.getRange(DATA_START_ROW, PT_COL, dataRows, PT_WIDTH).getValues();
       for (var j = 0; j < ptValues.length; j++) {
         var id = cellText_(ptValues[j][0]).trim();
         if (!id) continue;
@@ -117,10 +129,10 @@ function pullArtist_(artistName) {
 
   // Columns M-P: Manufacturing Plants. Same null-vs-empty-array signal as above.
   var plants = null;
-  if (cellText_(sheet.getRange(1, PLANTS_COL).getValue()).trim() === "ID") {
+  if (cellText_(sheet.getRange(HEADER_ROW, PLANTS_COL).getValue()).trim() === "ID") {
     plants = [];
     if (dataRows > 0) {
-      var plantValues = sheet.getRange(2, PLANTS_COL, dataRows, PLANTS_WIDTH).getValues();
+      var plantValues = sheet.getRange(DATA_START_ROW, PLANTS_COL, dataRows, PLANTS_WIDTH).getValues();
       for (var k = 0; k < plantValues.length; k++) {
         var pid = cellText_(plantValues[k][0]).trim();
         if (!pid) continue;
@@ -141,11 +153,15 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
   // across pushes instead of getting reset every sync.
   sheet.clear({ contentsOnly: true });
 
+  writeSectionLabel_(sheet, LEFT_COL, 2, "Checklist");
+  writeSectionLabel_(sheet, PT_COL, PT_WIDTH, "Distribution");
+  writeSectionLabel_(sheet, PLANTS_COL, PLANTS_WIDTH, "Manufacturing");
+
   // Columns A-B: Parameters
   var leftRows = [["Parameter", "Value"]];
   parameters.forEach(function (p) { leftRows.push([p[0], p[1]]); });
-  sheet.getRange(1, LEFT_COL, leftRows.length, 2).setValues(leftRows);
-  sheet.getRange(1, LEFT_COL, 1, 2).setFontWeight("bold");
+  sheet.getRange(HEADER_ROW, LEFT_COL, leftRows.length, 2).setValues(leftRows);
+  sheet.getRange(HEADER_ROW, LEFT_COL, 1, 2).setFontWeight("bold");
   applyParameterFormatting_(sheet, leftRows, parameterOptions || {});
 
   // Columns D-K: Product/Territory (one row per territory allocation)
@@ -155,8 +171,8 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
     while (padded.length < PT_WIDTH) padded.push("");
     return padded;
   });
-  sheet.getRange(1, PT_COL, ptRows.length, PT_WIDTH).setValues(ptRows);
-  sheet.getRange(1, PT_COL, 1, PT_WIDTH).setFontWeight("bold");
+  sheet.getRange(HEADER_ROW, PT_COL, ptRows.length, PT_WIDTH).setValues(ptRows);
+  sheet.getRange(HEADER_ROW, PT_COL, 1, PT_WIDTH).setFontWeight("bold");
 
   // Columns M-P: Manufacturing Plants
   var plantsHeader = ["ID", "Plant Name", "Region", "Quantity"];
@@ -165,10 +181,21 @@ function pushArtist_(artistName, parameters, productTerritory, plants, parameter
     while (padded.length < PLANTS_WIDTH) padded.push("");
     return padded;
   });
-  sheet.getRange(1, PLANTS_COL, plantsRows.length, PLANTS_WIDTH).setValues(plantsRows);
-  sheet.getRange(1, PLANTS_COL, 1, PLANTS_WIDTH).setFontWeight("bold");
+  sheet.getRange(HEADER_ROW, PLANTS_COL, plantsRows.length, PLANTS_WIDTH).setValues(plantsRows);
+  sheet.getRange(HEADER_ROW, PLANTS_COL, 1, PLANTS_WIDTH).setFontWeight("bold");
 
   // No auto-resize — column widths are yours to set and keep.
+}
+
+// Writes (and, the first time, merges) the section-label cell above one column block —
+// "Checklist" over A-B, "Distribution" over D-K, "Manufacturing" over M-P. Merging an
+// already-merged range is a harmless no-op, so this is safe to call on every push.
+function writeSectionLabel_(sheet, col, width, label) {
+  var range = sheet.getRange(SECTION_ROW, col, 1, width);
+  range.merge();
+  range.setValue(label);
+  range.setFontWeight("bold");
+  range.setHorizontalAlignment("center");
 }
 
 var STATUS_COLORS = {
@@ -200,10 +227,10 @@ function applyParameterFormatting_(sheet, leftRows, parameterOptions) {
     });
   });
 
-  for (var i = 1; i < leftRows.length; i++) { // row 0 is the header
+  for (var i = 1; i < leftRows.length; i++) { // leftRows[0] is the header, at HEADER_ROW
     var label = leftRows[i][0];
     var config = parameterOptions[label];
-    var cell = sheet.getRange(i + 1, valueCol);
+    var cell = sheet.getRange(HEADER_ROW + i, valueCol);
     if (!config) {
       cell.clearDataValidations();
       continue;
