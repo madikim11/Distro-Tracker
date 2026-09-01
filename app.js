@@ -2043,9 +2043,14 @@ function addArtist() {
   const name = prompt("Artist name:");
   if (!name || !name.trim()) return;
   const id = slugify(name.trim());
-  state.artists.push({ id, name: name.trim(), values: {} });
+  const artist = { id, name: name.trim(), values: {} };
+  state.artists.push(artist);
   saveState();
   render();
+  // Otherwise this artist only reaches the Sheet (and so becomes visible to anyone
+  // else) the first time someone happens to open its own page — easy to add several in
+  // a row from the dashboard and have them all sit invisibly local-only until then.
+  syncPushNow(artist);
 }
 
 function removeArtist(id) {
