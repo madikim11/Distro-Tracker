@@ -639,6 +639,7 @@ function render() {
   if (match) {
     const artist = state.artists.find((a) => a.id === decodeURIComponent(match[1]));
     if (artist) {
+      syncExitDashboard();
       app.appendChild(renderArtistPage(artist));
       syncEnterArtist(artist);
       syncSchedulePush(artist);
@@ -648,6 +649,7 @@ function render() {
   syncExitArtist();
   app.appendChild(renderDashboard());
   syncDiscoverArtists();
+  syncEnterDashboard();
 }
 
 // "YYYY-MM" from Street Date (Digital), or null if it isn't set — drives which month
@@ -1419,6 +1421,7 @@ function startEditRelease(node, artist) {
 
 const SYNC_URL = typeof SHEET_SYNC_URL === "string" ? SHEET_SYNC_URL.trim() : "";
 const SYNC_POLL_MS = 30000;
+const SYNC_DASHBOARD_POLL_MS = 60000; // a tick here is a full sweep of every artist, not just one
 const SYNC_PUSH_DEBOUNCE_MS = 1500;
 
 let syncActiveArtistId = null;
@@ -1481,6 +1484,26 @@ function syncExitArtist() {
     syncPushTimer = null;
   }
   syncActiveArtistId = null;
+}
+
+// Mirrors syncEnterArtist/syncExitArtist for the dashboard: without this, the
+// dashboard only ever auto-checks for brand new Sheet tabs (syncDiscoverArtists) and
+// never re-pulls data for artists it already knows about — so an edit made directly in
+// the Sheet to an existing artist would never show up on the dashboard on its own,
+// only after opening that artist's own page or clicking Sync now. Runs less often than
+// an artist page's poll since one tick here is a full sweep of every artist, not one.
+let syncDashboardIntervalId = null;
+
+function syncEnterDashboard() {
+  if (!syncEnabled() || syncDashboardIntervalId) return;
+  syncDashboardIntervalId = setInterval(syncAllArtists, SYNC_DASHBOARD_POLL_MS);
+}
+
+function syncExitDashboard() {
+  if (syncDashboardIntervalId) {
+    clearInterval(syncDashboardIntervalId);
+    syncDashboardIntervalId = null;
+  }
 }
 
 // Finds Sheet tabs that don't have a matching local artist yet — e.g. a tab created by

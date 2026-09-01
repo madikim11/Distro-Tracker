@@ -44,8 +44,10 @@ after page load).
 - **Editing on the website** pushes to the Sheet automatically about 1.5 seconds after
   you stop typing/clicking.
 - **Editing the Sheet directly** gets pulled into the site the next time you load that
-  artist's page, and automatically every ~30 seconds while that page stays open. There's
-  also a **Sync now** button if you don't want to wait.
+  artist's page, and automatically every ~30 seconds while that page stays open. The
+  dashboard also refreshes every known artist automatically, about every 60 seconds
+  while it's open. There's also a **Sync now** button (on an artist's page, or the
+  dashboard-wide one) if you don't want to wait.
 - If you edit both sides within the same ~30-second window, the website's version wins
   for that round — there's no merge of conflicting changes.
 - Each artist's tab has four column blocks side by side: **A-B** (simple parameters,
