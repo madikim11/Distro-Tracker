@@ -650,6 +650,68 @@ function render() {
   syncDiscoverArtists();
 }
 
+// "YYYY-MM" from Street Date (Digital), or null if it isn't set — drives which month
+// bucket an artist's card lands in on the dashboard.
+function monthBucketKey(artist) {
+  const raw = artist.values.streetDateDigital;
+  const match = raw && /^(\d{4})-(\d{2})/.exec(raw);
+  return match ? `${match[1]}-${match[2]}` : null;
+}
+
+function monthBucketLabel(key) {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function renderArtistCard(artist) {
+  const filledCount = state.fields.filter((field) => isFieldFilled(field, artist)).length;
+  const completion = state.fields.length ? filledCount / state.fields.length : 0;
+  const hue = completionHue(completion);
+
+  return el(
+    "div",
+    {
+      class: "artist-card",
+      style: `background: hsl(${hue}, 60%, 93%); border-color: hsl(${hue}, 55%, 72%);`,
+      onclick: (e) => {
+        if (e.target.closest(".remove-artist")) return;
+        navigate(`#/artist/${encodeURIComponent(artist.id)}`);
+      },
+    },
+    [
+      el("div", { class: "card-accent-bar", style: `background: hsl(${hue}, 65%, 46%);` }),
+      el("button", {
+        class: "btn-ghost remove-artist",
+        title: "Remove artist",
+        onclick: (e) => {
+          e.stopPropagation();
+          removeArtist(artist.id);
+        },
+      }, "✕"),
+      el("p", { class: "name" }, artist.name),
+      el("p", { class: "completion-note" }, `${filledCount}/${state.fields.length} filled`),
+      el("div", { class: "card-move-row" }, [
+        el("button", {
+          class: "btn-ghost card-move-btn",
+          title: "Move to top",
+          onclick: (e) => {
+            e.stopPropagation();
+            moveArtist(artist.id, "top");
+          },
+        }, "↑"),
+        el("button", {
+          class: "btn-ghost card-move-btn",
+          title: "Move to bottom",
+          onclick: (e) => {
+            e.stopPropagation();
+            moveArtist(artist.id, "bottom");
+          },
+        }, "↓"),
+      ]),
+    ]
+  );
+}
+
 function renderDashboard() {
   const container = el("div");
 
@@ -668,57 +730,30 @@ function renderDashboard() {
     return container;
   }
 
-  const grid = el("div", { class: "artist-grid" });
+  // Bucket by the month of Street Date (Digital); no date set lands in a catch-all
+  // "Unassigned" bucket at the end. Buckets only appear for months that actually have
+  // an artist, sorted chronologically, each keeping its artists in their existing
+  // relative order — so the move-to-top/bottom buttons still work as "top/bottom of
+  // this bucket" rather than the whole dashboard.
+  const buckets = new Map();
   for (const artist of state.artists) {
-    const filledCount = state.fields.filter((field) => isFieldFilled(field, artist)).length;
-    const completion = state.fields.length ? filledCount / state.fields.length : 0;
-    const hue = completionHue(completion);
-
-    const card = el(
-      "div",
-      {
-        class: "artist-card",
-        style: `background: hsl(${hue}, 60%, 93%); border-color: hsl(${hue}, 55%, 72%);`,
-        onclick: (e) => {
-          if (e.target.closest(".remove-artist")) return;
-          navigate(`#/artist/${encodeURIComponent(artist.id)}`);
-        },
-      },
-      [
-        el("div", { class: "card-accent-bar", style: `background: hsl(${hue}, 65%, 46%);` }),
-        el("button", {
-          class: "btn-ghost remove-artist",
-          title: "Remove artist",
-          onclick: (e) => {
-            e.stopPropagation();
-            removeArtist(artist.id);
-          },
-        }, "✕"),
-        el("p", { class: "name" }, artist.name),
-        el("p", { class: "completion-note" }, `${filledCount}/${state.fields.length} filled`),
-        el("div", { class: "card-move-row" }, [
-          el("button", {
-            class: "btn-ghost card-move-btn",
-            title: "Move to top",
-            onclick: (e) => {
-              e.stopPropagation();
-              moveArtist(artist.id, "top");
-            },
-          }, "↑"),
-          el("button", {
-            class: "btn-ghost card-move-btn",
-            title: "Move to bottom",
-            onclick: (e) => {
-              e.stopPropagation();
-              moveArtist(artist.id, "bottom");
-            },
-          }, "↓"),
-        ]),
-      ]
-    );
-    grid.appendChild(card);
+    const key = monthBucketKey(artist) || "unassigned";
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(artist);
   }
-  container.appendChild(grid);
+  const monthKeys = [...buckets.keys()].filter((k) => k !== "unassigned").sort();
+  const orderedKeys = buckets.has("unassigned") ? [...monthKeys, "unassigned"] : monthKeys;
+
+  for (const key of orderedKeys) {
+    container.appendChild(
+      el("p", { class: "month-bucket-heading" }, key === "unassigned" ? "Unassigned" : monthBucketLabel(key))
+    );
+    const grid = el("div", { class: "artist-grid" });
+    for (const artist of buckets.get(key)) {
+      grid.appendChild(renderArtistCard(artist));
+    }
+    container.appendChild(grid);
+  }
   return container;
 }
 

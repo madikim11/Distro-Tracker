@@ -161,10 +161,25 @@ button {
 
 /* ---------- dashboard: artist cards ---------- */
 
+.month-bucket-heading {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 28px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.month-bucket-heading:first-of-type {
+  margin-top: 4px;
+}
+
 .artist-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 14px;
+}
+.artist-grid + .month-bucket-heading {
+  margin-top: 28px;
 }
 
 .artist-card {
