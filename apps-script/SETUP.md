@@ -1,4 +1,4 @@
-# Distro Tracker — Google Sheet sync setup
+# Production Tracker — Google Sheet sync setup
 
 Two pieces: a Google Sheet (data) and an Apps Script (backend). The site talks to the
 Apps Script over HTTP; the Sheet itself needs no special structure beforehand — each

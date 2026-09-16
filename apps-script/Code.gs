@@ -1,4 +1,4 @@
-// Distro Tracker backend — bind this script to the Google Sheet that will hold one
+// Production Tracker backend — bind this script to the Google Sheet that will hold one
 // tab per artist. Each tab is fully owned by the sync (its layout is written by
 // pushArtist_ below); you can hand-edit the cell values, just don't rename or move the
 // four column blocks:

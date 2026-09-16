@@ -719,7 +719,7 @@ function renderDashboard() {
 
   const header = el("div", { class: "header-row" }, [
     el("div", {}, [
-      el("h1", {}, "Distro Tracker"),
+      el("h1", {}, "Production Tracker"),
       el("p", { class: "subtitle" }, "Physical & digital distribution status by artist"),
     ]),
     el("button", { class: "btn-primary", onclick: addArtist }, "+ Add Artist"),
