@@ -774,6 +774,7 @@ function renderArtistPage(artist) {
   ]);
   container.appendChild(heading);
   container.appendChild(renderReleaseRow(artist));
+  container.appendChild(renderLabelRow(artist));
   container.appendChild(renderSyncStatusRow(artist));
   container.appendChild(el("p", { class: "subtitle" }, "Distribution parameters"));
 
@@ -1408,6 +1409,40 @@ function startEditRelease(node, artist) {
   input.addEventListener("blur", commit);
 }
 
+function renderLabelRow(artist) {
+  const current = artist.label || "";
+  const valueSpan = el(
+    "span",
+    {
+      class: "release-value" + (current ? "" : " placeholder"),
+      onclick: (e) => startEditLabel(e.currentTarget, artist),
+    },
+    current || "Click to set…"
+  );
+  return el("p", { class: "release-line" }, ["Label: ", valueSpan]);
+}
+
+function startEditLabel(node, artist) {
+  const input = el("input", { type: "text", placeholder: "Record label" });
+  input.value = artist.label || "";
+  node.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const commit = () => {
+    const val = input.value.trim();
+    if (val) artist.label = val;
+    else delete artist.label;
+    saveState();
+    setTimeout(render, 0);
+  };
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") input.blur();
+    if (e.key === "Escape") render();
+  });
+  input.addEventListener("blur", commit);
+}
+
 // ============================================================================
 // Google Sheet sync (optional — no-ops entirely when sync-config.js's
 // SHEET_SYNC_URL is blank). See apps-script/SETUP.md for how to connect one.
@@ -1629,7 +1664,7 @@ function paramLabel(field) {
 }
 
 function syncBuildParameters(artist) {
-  const rows = [["Artist", artist.name], ["Title", artist.release || ""]];
+  const rows = [["Artist", artist.name], ["Title", artist.release || ""], ["Label", artist.label || ""]];
   const notes = artist.notes || {};
   for (const field of state.fields) {
     if (field.type === "multi") continue; // Product/Territory get their own table
@@ -1715,6 +1750,11 @@ function syncApplyParameters(artist, rows) {
     const release = val("Title");
     if (release) artist.release = release;
     else delete artist.release;
+  }
+  if (hasLabel("Label")) {
+    const label = val("Label");
+    if (label) artist.label = label;
+    else delete artist.label;
   }
 
   for (const field of state.fields) {
